@@ -6,6 +6,8 @@ import './App.css';
 import Login from './pages/Login.jsx';
 import Parent from './pages/Parent.jsx';
 import Driver from './pages/Driver.jsx';
+import FindDrivers from './pages/FindDrivers.jsx';
+import DriverProfile from './pages/DriverProfile.jsx';
 
 function LogoutConfirmationModal({ isOpen, onClose, onConfirm }) {
   if (!isOpen) return null;
@@ -94,9 +96,13 @@ function AppContent() {
         </div>
         <nav className="nav">
           <Link to="/" onClick={handleHomeClick}>Home</Link>
+          <Link to="/find-drivers">Find Drivers</Link>
           <Link to="/login">Login</Link>
           <Link to="/parent">Parent</Link>
           <Link to="/driver">Driver</Link>
+          {user && userRole === 'driver' && (
+            <Link to="/driver-profile">Profile</Link>
+          )}
           {user && (
             <span style={{ marginLeft: 'auto', fontSize: '0.9em', color: '#666' }}>
               {user.email} ({userRole})
@@ -112,21 +118,30 @@ function AppContent() {
           element={
             <div className="card">
               <h3>School Transport System</h3>
-              <h4 style={{ marginTop: 20, marginBottom: 16 }}>Select your role</h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 400 }}>
-                <Link className="btn btn-primary" to="/login?role=driver" style={{ padding: '20px 24px', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <span style={{ fontSize: '1.5em', fontWeight: 'bold', minWidth: '30px' }}>1.</span>
+              <h4 style={{ marginTop: 20, marginBottom: 16 }}>What would you like to do?</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 450 }}>
+                <Link className="btn btn-primary" to="/find-drivers" style={{ padding: '20px 24px', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <span style={{ fontSize: '1.5em', fontWeight: 'bold', minWidth: '30px' }}>🔍</span>
                   <div>
-                    <div style={{ fontSize: '1.1em', fontWeight: 600 }}>Driver</div>
+                    <div style={{ fontSize: '1.1em', fontWeight: 600 }}>Find School Bus Drivers</div>
+                    <div style={{ fontSize: '0.9em', opacity: 0.8, marginTop: 4 }}>
+                      Browse and connect with drivers in your area
+                    </div>
+                  </div>
+                </Link>
+                <Link className="btn btn-primary" to="/login?role=driver" style={{ padding: '20px 24px', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <span style={{ fontSize: '1.5em', fontWeight: 'bold', minWidth: '30px' }}>🚌</span>
+                  <div>
+                    <div style={{ fontSize: '1.1em', fontWeight: 600 }}>Driver Dashboard</div>
                     <div style={{ fontSize: '0.9em', opacity: 0.8, marginTop: 4 }}>
                       Track location & manage students
                     </div>
                   </div>
                 </Link>
                 <Link className="btn btn-primary" to="/login?role=parent" style={{ padding: '20px 24px', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <span style={{ fontSize: '1.5em', fontWeight: 'bold', minWidth: '30px' }}>2.</span>
+                  <span style={{ fontSize: '1.5em', fontWeight: 'bold', minWidth: '30px' }}>👨‍👩‍👧‍👦</span>
                   <div>
-                    <div style={{ fontSize: '1.1em', fontWeight: 600 }}>Parent</div>
+                    <div style={{ fontSize: '1.1em', fontWeight: 600 }}>Parent Dashboard</div>
                     <div style={{ fontSize: '0.9em', opacity: 0.8, marginTop: 4 }}>
                       Monitor your children's status
                     </div>
@@ -137,6 +152,8 @@ function AppContent() {
           }
         />
         <Route path="/login" element={<Login />} />
+        <Route path="/find-drivers" element={<FindDrivers />} />
+        <Route path="/driver-profile" element={<DriverProfile />} />
         <Route path="/parent" element={<Parent />} />
         <Route path="/driver" element={<Driver />} />
         <Route path="*" element={<Navigate to="/" replace />} />
