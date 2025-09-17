@@ -11,8 +11,9 @@
   border-radius: 12px;
   font-size: 0.75em;
   font-weight: 500;
-  background-color: #e5e7eb;
-  color: #374151;
+  background-color: var(--button-bg);
+  color: var(--text);
+  transition: all 0.3s ease;
 }
 
 .badge-warning {
@@ -20,14 +21,29 @@
   color: #92400e;
 }
 
+.dark-theme .badge-warning {
+  background-color: #d97706;
+  color: #fef3c7;
+}
+
 .badge-success {
   background-color: #10b981;
   color: white;
 }
 
+.dark-theme .badge-success {
+  background-color: #059669;
+  color: #d1fae5;
+}
+
 .badge-error {
   background-color: #ef4444;
   color: white;
+}
+
+.dark-theme .badge-error {
+  background-color: #dc2626;
+  color: #fecaca;
 }
 
 .logo {

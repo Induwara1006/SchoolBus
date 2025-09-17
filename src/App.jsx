@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Link, Navigate, useLocation, useNavigate 
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './firebase';
+import { ThemeProvider } from './contexts/ThemeContext';
+import ThemeToggle from './components/ThemeToggle';
 import './App.css';
 import Login from './pages/Login.jsx';
 import Parent from './pages/Parent.jsx';
@@ -94,37 +96,40 @@ function AppContent() {
           <span className="brand-badge" />
           <span>School Transport</span>
         </div>
-        {location.pathname !== '/' && (
-          <nav className="nav">
-            <Link to="/" onClick={handleHomeClick}>Home</Link>
-            
-            {/* Show role-specific navigation */}
-            {user && userRole === 'driver' && (
-              <>
-                <Link to="/driver">Dashboard</Link>
-                <Link to="/driver-profile">Profile</Link>
-              </>
-            )}
-            
-            {user && userRole === 'parent' && (
-              <>
-                <Link to="/parent">Dashboard</Link>
-              </>
-            )}
-            
-            {/* Show general links only when not logged in */}
-            {!user && (
-              <>
-              </>
-            )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <ThemeToggle />
+          {location.pathname !== '/' && (
+            <nav className="nav">
+              <Link to="/" onClick={handleHomeClick}>Home</Link>
+              
+              {/* Show role-specific navigation */}
+              {user && userRole === 'driver' && (
+                <>
+                  <Link to="/driver">Dashboard</Link>
+                  <Link to="/driver-profile">Profile</Link>
+                </>
+              )}
+              
+              {user && userRole === 'parent' && (
+                <>
+                  <Link to="/parent">Dashboard</Link>
+                </>
+              )}
+              
+              {/* Show general links only when not logged in */}
+              {!user && (
+                <>
+                </>
+              )}
 
-            {user && (
-              <span style={{ marginLeft: 'auto', fontSize: '0.9em', color: '#666' }}>
-                {user.email} ({userRole})
-              </span>
-            )}
-          </nav>
-        )}
+              {user && (
+                <span style={{ marginLeft: 'auto', fontSize: '0.9em', color: 'var(--muted)' }}>
+                  {user.email} ({userRole})
+                </span>
+              )}
+            </nav>
+          )}
+        </div>
       </header>
 
       <div className="content">
@@ -178,9 +183,11 @@ function AppContent() {
 
 function App() {
   return (
-    <BrowserRouter>
-      <AppContent />
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        <AppContent />
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }
 

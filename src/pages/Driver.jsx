@@ -46,7 +46,29 @@ export default function Driver() {
       setRequests(data.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds));
     });
     return () => unsub();
-  }, [user]);	const saveBusId = () => {
+  }, [user]);
+
+  const updateStudentStatus = async (studentId, newStatus) => {
+    try {
+      await updateDoc(doc(db, 'students', studentId), {
+        status: newStatus,
+        lastStatusUpdate: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error updating student status:', error);
+      alert('Failed to update student status');
+    }
+  };
+
+  const statusOptions = [
+    { value: 'at-home', label: '🏠 At Home', color: '#6b7280' },
+    { value: 'waiting-pickup', label: '⏰ Waiting for Pickup', color: '#f59e0b' },
+    { value: 'picked-up', label: '🚌 Picked Up', color: '#3b82f6' },
+    { value: 'in-transit', label: '🚛 In Transit', color: '#8b5cf6' },
+    { value: 'at-school', label: '🏫 At School', color: '#10b981' },
+    { value: 'returning', label: '🔄 Returning Home', color: '#f97316' },
+    { value: 'dropped-off', label: '✅ Dropped Off', color: '#059669' }
+  ];	const saveBusId = () => {
 		localStorage.setItem('driver.busId', busId.trim());
 		alert('Bus ID saved');
 	};
@@ -93,9 +115,10 @@ export default function Driver() {
 				parentId: request.parentId,
 				pickupAddress: request.pickupAddress,
 				dropoffAddress: request.dropoffAddress,
-				status: 'not-in-bus',
+				status: 'at-home',
 				monthlyFee: 2500, // Default fee, can be customized
-				createdAt: serverTimestamp()
+				createdAt: serverTimestamp(),
+				lastStatusUpdate: serverTimestamp()
 			});
 
 			// Update request status
@@ -221,28 +244,68 @@ export default function Driver() {
 				{students.length === 0 ? (
 					<p className="muted">No students assigned to this bus.</p>
 				) : (
-					<ul className="list">
-						{students.map((student) => (
-							<li key={student.id}>
-								<span>{student.fullName}</span>
-								<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-									<span className={`muted ${student.status === 'in-bus' ? '' : 'text-orange'}`}>
-										{student.status === 'in-bus' ? '🚌 In bus' : '🏠 Not in bus'}
-									</span>
-									<button 
-										className="btn"
-										onClick={() => toggleStudentStatus(student)}
-									>
-										Mark {student.status === 'in-bus' ? 'Out' : 'In'}
-									</button>
+					<div style={{ display: 'grid', gap: '12px' }}>
+						{students.map((student) => {
+							const currentStatus = student.status || 'at-home';
+							const statusOption = statusOptions.find(opt => opt.value === currentStatus) || statusOptions[0];
+							
+							return (
+								<div key={student.id} className="card" style={{ 
+									padding: '12px',
+									border: `2px solid ${statusOption.color}20`,
+									borderLeft: `4px solid ${statusOption.color}`
+								}}>
+									<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+										<div style={{ flex: 1 }}>
+											<div style={{ fontWeight: '600', marginBottom: '4px' }}>
+												{student.fullName}
+											</div>
+											<div style={{ fontSize: '0.9em', color: 'var(--muted)', marginBottom: '8px' }}>
+												<div>Age: {student.age || 'Not specified'}</div>
+												<div>📍 Pickup: {student.pickupAddress || 'Not specified'}</div>
+											</div>
+											<div style={{
+												display: 'inline-block',
+												padding: '4px 8px',
+												borderRadius: '12px',
+												backgroundColor: statusOption.color,
+												color: 'white',
+												fontSize: '0.75em',
+												fontWeight: '500'
+											}}>
+												{statusOption.label}
+											</div>
+										</div>
+										
+										<div style={{ marginLeft: '12px' }}>
+											<select 
+												value={currentStatus}
+												onChange={(e) => updateStudentStatus(student.id, e.target.value)}
+												style={{
+													padding: '6px 8px',
+													borderRadius: '6px',
+													border: '1px solid var(--border)',
+													background: 'var(--input-bg)',
+													color: 'var(--text)',
+													fontSize: '0.8em'
+												}}
+											>
+												{statusOptions.map(option => (
+													<option key={option.value} value={option.value}>
+														{option.label}
+													</option>
+												))}
+											</select>
+										</div>
+									</div>
 								</div>
-							</li>
-						))}
-					</ul>
+							);
+						})}
+					</div>
 				)}
 
-				<p className="muted" style={{ marginTop: 12 }}>
-					Use location tracking and student status to keep parents informed in real-time.
+				<p className="muted" style={{ marginTop: 16 }}>
+					💡 Update student status in real-time to keep parents informed. Location tracking shows bus position on parent dashboards.
 				</p>
 			</div>
 		);
