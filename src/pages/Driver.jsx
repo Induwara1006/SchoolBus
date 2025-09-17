@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
-import { collection, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, updateDoc, where, addDoc, serverTimestamp } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import useDriverTracking from '../hooks/useDriverTracking';
 
@@ -10,6 +10,7 @@ export default function Driver() {
   const [busId, setBusId] = useState('');
   const [students, setStudents] = useState([]);
   const [userRole, setUserRole] = useState('');
+  const [requests, setRequests] = useState([]);
   const { isTracking, lastError, toggleTracking } = useDriverTracking();
   const navigate = useNavigate();
 
@@ -34,7 +35,18 @@ export default function Driver() {
       setStudents(data);
     });
     return () => unsub();
-  }, [user, busId]);	const saveBusId = () => {
+  }, [user, busId]);
+
+  // Load transport requests for this driver
+  useEffect(() => {
+    if (!user) return;
+    const q = query(collection(db, 'transportRequests'), where('driverId', '==', user.uid));
+    const unsub = onSnapshot(q, (snap) => {
+      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setRequests(data.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds));
+    });
+    return () => unsub();
+  }, [user]);	const saveBusId = () => {
 		localStorage.setItem('driver.busId', busId.trim());
 		alert('Bus ID saved');
 	};
@@ -45,6 +57,58 @@ export default function Driver() {
 			await updateDoc(doc(db, 'students', student.id), { status: newStatus });
 		} catch (e) {
 			alert(`Failed to update student status: ${e.message}`);
+		}
+	};
+
+	const handleRequestResponse = async (requestId, action) => {
+		try {
+			await updateDoc(doc(db, 'transportRequests', requestId), {
+				status: action,
+				respondedAt: serverTimestamp()
+			});
+
+			if (action === 'accepted') {
+				alert('Request accepted! You can now contact the parent to discuss terms and finalize the agreement.');
+			} else {
+				alert('Request declined.');
+			}
+		} catch (error) {
+			console.error('Error updating request:', error);
+			alert('Failed to update request. Please try again.');
+		}
+	};
+
+	const addStudentToBus = async (request) => {
+		if (!busId) {
+			alert('Please set your Bus ID first.');
+			return;
+		}
+
+		try {
+			// Add student to the students collection
+			await addDoc(collection(db, 'students'), {
+				fullName: request.childName,
+				age: request.childAge || '',
+				busId: busId,
+				parentId: request.parentId,
+				pickupAddress: request.pickupAddress,
+				dropoffAddress: request.dropoffAddress,
+				status: 'not-in-bus',
+				monthlyFee: 2500, // Default fee, can be customized
+				createdAt: serverTimestamp()
+			});
+
+			// Update request status
+			await updateDoc(doc(db, 'transportRequests', request.id), {
+				status: 'completed',
+				studentAdded: true,
+				completedAt: serverTimestamp()
+			});
+
+			alert(`${request.childName} has been added to your bus route!`);
+		} catch (error) {
+			console.error('Error adding student:', error);
+			alert('Failed to add student. Please try again.');
 		}
 	};
 
@@ -78,6 +142,67 @@ export default function Driver() {
 						⚙️ Complete Profile
 					</button>
 				</div>
+
+				{/* Transport Requests Section */}
+				{requests.length > 0 && (
+					<div style={{ marginBottom: 24 }}>
+						<h4>📝 Transport Requests ({requests.filter(r => r.status === 'pending').length} pending)</h4>
+						{requests.slice(0, 5).map((request) => (
+							<div key={request.id} className="card" style={{ marginBottom: 12, padding: 16 }}>
+								<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+									<div style={{ flex: 1 }}>
+										<h5 style={{ margin: 0, marginBottom: 8 }}>
+											{request.childName} (Parent: {request.parentName})
+										</h5>
+										<div style={{ fontSize: '0.9em', color: '#666', marginBottom: 8 }}>
+											<div>📍 Pickup: {request.pickupAddress}</div>
+											<div>🏫 Drop-off: {request.dropoffAddress}</div>
+											{request.preferredTime && <div>⏰ Preferred time: {request.preferredTime}</div>}
+											{request.additionalNotes && <div>📝 Notes: {request.additionalNotes}</div>}
+										</div>
+										<span className={`badge ${
+											request.status === 'pending' ? 'badge-warning' : 
+											request.status === 'accepted' ? 'badge-success' : 'badge-error'
+										}`}>
+											{request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+										</span>
+									</div>
+									
+									<div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 120 }}>
+										{request.status === 'pending' && (
+											<>
+												<button 
+													className="btn btn-primary" 
+													onClick={() => handleRequestResponse(request.id, 'accepted')}
+													style={{ fontSize: '0.8em', padding: '6px 12px' }}
+												>
+													✅ Accept
+												</button>
+												<button 
+													className="btn" 
+													onClick={() => handleRequestResponse(request.id, 'declined')}
+													style={{ fontSize: '0.8em', padding: '6px 12px' }}
+												>
+													❌ Decline
+												</button>
+											</>
+										)}
+										{request.status === 'accepted' && !request.studentAdded && (
+											<button 
+												className="btn btn-primary" 
+												onClick={() => addStudentToBus(request)}
+												style={{ fontSize: '0.8em', padding: '6px 12px' }}
+											>
+												➕ Add to Bus
+											</button>
+										)}
+									</div>
+								</div>
+							</div>
+						))}
+					</div>
+				)}
+
 				<div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 12 }}>
 					<div className="field" style={{ flex: 1 }}>
 						<label className="muted">Bus ID</label>

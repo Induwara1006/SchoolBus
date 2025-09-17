@@ -1,15 +1,31 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../firebase';
+import { collection, getDocs, query, where, addDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, db } from '../firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 export default function FindDrivers() {
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchArea, setSearchArea] = useState('');
   const [filteredDrivers, setFilteredDrivers] = useState([]);
+  const [user, setUser] = useState(null);
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [selectedDriver, setSelectedDriver] = useState(null);
+  const [requestData, setRequestData] = useState({
+    childName: '',
+    childAge: '',
+    pickupAddress: '',
+    dropoffAddress: '',
+    preferredTime: '',
+    additionalNotes: ''
+  });
 
   useEffect(() => {
+    console.log('FindDrivers component mounted');
+    console.log('Current user role from localStorage:', localStorage.getItem('user.role'));
+    const unsubscribe = onAuthStateChanged(auth, setUser);
     fetchDrivers();
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -29,12 +45,16 @@ export default function FindDrivers() {
   const fetchDrivers = async () => {
     try {
       setLoading(true);
+      console.log('Fetching drivers...');
       const q = query(collection(db, 'users'), where('role', '==', 'driver'));
       const querySnapshot = await getDocs(q);
+      
+      console.log('Query snapshot size:', querySnapshot.size);
       
       const driverList = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
+        console.log('Driver document:', doc.id, data);
         if (data.isAvailable !== false) { // Only show available drivers
           driverList.push({
             id: doc.id,
@@ -43,6 +63,7 @@ export default function FindDrivers() {
         }
       });
       
+      console.log('Final driver list:', driverList);
       setDrivers(driverList);
       setFilteredDrivers(driverList);
     } catch (error) {
@@ -65,6 +86,58 @@ export default function FindDrivers() {
       window.open(emailUrl, '_blank');
     } else {
       alert('Contact information not available for this driver.');
+    }
+  };
+
+  const handleSendRequest = (driver) => {
+    if (!user) {
+      alert('Please login to send a request to drivers.');
+      return;
+    }
+    setSelectedDriver(driver);
+    setShowRequestModal(true);
+  };
+
+  const handleSubmitRequest = async () => {
+    if (!selectedDriver || !user) return;
+    
+    // Validate required fields
+    if (!requestData.childName || !requestData.pickupAddress || !requestData.dropoffAddress) {
+      alert('Please fill in all required fields.');
+      return;
+    }
+
+    try {
+      await addDoc(collection(db, 'transportRequests'), {
+        driverId: selectedDriver.id,
+        driverName: selectedDriver.displayName,
+        parentId: user.uid,
+        parentName: user.displayName || user.email,
+        parentEmail: user.email,
+        childName: requestData.childName,
+        childAge: requestData.childAge,
+        pickupAddress: requestData.pickupAddress,
+        dropoffAddress: requestData.dropoffAddress,
+        preferredTime: requestData.preferredTime,
+        additionalNotes: requestData.additionalNotes,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+        requestMessage: `I would like to request transport service for my child ${requestData.childName}. Please review the details and let me know if you can provide this service.`
+      });
+
+      alert('Request sent successfully! The driver will review your request and respond.');
+      setShowRequestModal(false);
+      setRequestData({
+        childName: '',
+        childAge: '',
+        pickupAddress: '',
+        dropoffAddress: '',
+        preferredTime: '',
+        additionalNotes: ''
+      });
+    } catch (error) {
+      console.error('Error sending request:', error);
+      alert('Failed to send request. Please try again.');
     }
   };
 
@@ -98,13 +171,22 @@ export default function FindDrivers() {
               </div>
             </div>
             
-            <button 
-              className="btn btn-primary"
-              onClick={() => handleContactDriver(driver)}
-              style={{ fontSize: '0.9em', padding: '8px 16px' }}
-            >
-              📞 Contact
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button 
+                className="btn btn-primary"
+                onClick={() => handleSendRequest(driver)}
+                style={{ fontSize: '0.9em', padding: '8px 16px' }}
+              >
+                📝 Send Request
+              </button>
+              <button 
+                className="btn"
+                onClick={() => handleContactDriver(driver)}
+                style={{ fontSize: '0.9em', padding: '8px 16px' }}
+              >
+                📞 Contact
+              </button>
+            </div>
           </div>
 
           <div style={{ marginBottom: 12 }}>
@@ -230,6 +312,123 @@ export default function FindDrivers() {
           <li>Request a trial ride if possible</li>
         </ul>
       </div>
+
+      {/* Request Modal */}
+      {showRequestModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div className="card" style={{ maxWidth: 500, margin: 20, maxHeight: '90vh', overflow: 'auto' }}>
+            <h3>Send Transport Request</h3>
+            <p style={{ color: '#666', marginBottom: 20 }}>
+              Send a request to <strong>{selectedDriver?.displayName}</strong> for school transport service.
+            </p>
+
+            <div style={{ display: 'grid', gap: 16 }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: 4, fontWeight: 600 }}>
+                  Child's Name *
+                </label>
+                <input
+                  type="text"
+                  value={requestData.childName}
+                  onChange={(e) => setRequestData({...requestData, childName: e.target.value})}
+                  placeholder="Enter your child's name"
+                  style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '4px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: 4, fontWeight: 600 }}>
+                  Child's Age
+                </label>
+                <input
+                  type="number"
+                  value={requestData.childAge}
+                  onChange={(e) => setRequestData({...requestData, childAge: e.target.value})}
+                  placeholder="Age"
+                  style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '4px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: 4, fontWeight: 600 }}>
+                  Pickup Address *
+                </label>
+                <input
+                  type="text"
+                  value={requestData.pickupAddress}
+                  onChange={(e) => setRequestData({...requestData, pickupAddress: e.target.value})}
+                  placeholder="Home/pickup address"
+                  style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '4px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: 4, fontWeight: 600 }}>
+                  School/Drop-off Address *
+                </label>
+                <input
+                  type="text"
+                  value={requestData.dropoffAddress}
+                  onChange={(e) => setRequestData({...requestData, dropoffAddress: e.target.value})}
+                  placeholder="School or destination address"
+                  style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '4px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: 4, fontWeight: 600 }}>
+                  Preferred Pickup Time
+                </label>
+                <input
+                  type="time"
+                  value={requestData.preferredTime}
+                  onChange={(e) => setRequestData({...requestData, preferredTime: e.target.value})}
+                  style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '4px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: 4, fontWeight: 600 }}>
+                  Additional Notes
+                </label>
+                <textarea
+                  value={requestData.additionalNotes}
+                  onChange={(e) => setRequestData({...requestData, additionalNotes: e.target.value})}
+                  placeholder="Any special requirements or additional information..."
+                  rows={3}
+                  style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '4px', resize: 'vertical' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, marginTop: 20, justifyContent: 'flex-end' }}>
+              <button 
+                className="btn" 
+                onClick={() => setShowRequestModal(false)}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn btn-primary" 
+                onClick={handleSubmitRequest}
+              >
+                Send Request
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

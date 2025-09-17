@@ -94,21 +94,37 @@ function AppContent() {
           <span className="brand-badge" />
           <span>School Transport</span>
         </div>
-        <nav className="nav">
-          <Link to="/" onClick={handleHomeClick}>Home</Link>
-          <Link to="/find-drivers">Find Drivers</Link>
-          <Link to="/login">Login</Link>
-          <Link to="/parent">Parent</Link>
-          <Link to="/driver">Driver</Link>
-          {user && userRole === 'driver' && (
-            <Link to="/driver-profile">Profile</Link>
-          )}
-          {user && (
-            <span style={{ marginLeft: 'auto', fontSize: '0.9em', color: '#666' }}>
-              {user.email} ({userRole})
-            </span>
-          )}
-        </nav>
+        {location.pathname !== '/' && (
+          <nav className="nav">
+            <Link to="/" onClick={handleHomeClick}>Home</Link>
+            
+            {/* Show role-specific navigation */}
+            {user && userRole === 'driver' && (
+              <>
+                <Link to="/driver">Dashboard</Link>
+                <Link to="/driver-profile">Profile</Link>
+              </>
+            )}
+            
+            {user && userRole === 'parent' && (
+              <>
+                <Link to="/parent">Dashboard</Link>
+              </>
+            )}
+            
+            {/* Show general links only when not logged in */}
+            {!user && (
+              <>
+              </>
+            )}
+
+            {user && (
+              <span style={{ marginLeft: 'auto', fontSize: '0.9em', color: '#666' }}>
+                {user.email} ({userRole})
+              </span>
+            )}
+          </nav>
+        )}
       </header>
 
       <div className="content">
@@ -120,15 +136,6 @@ function AppContent() {
               <h3>School Transport System</h3>
               <h4 style={{ marginTop: 20, marginBottom: 16 }}>What would you like to do?</h4>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 450 }}>
-                <Link className="btn btn-primary" to="/find-drivers" style={{ padding: '20px 24px', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <span style={{ fontSize: '1.5em', fontWeight: 'bold', minWidth: '30px' }}>🔍</span>
-                  <div>
-                    <div style={{ fontSize: '1.1em', fontWeight: 600 }}>Find School Bus Drivers</div>
-                    <div style={{ fontSize: '0.9em', opacity: 0.8, marginTop: 4 }}>
-                      Browse and connect with drivers in your area
-                    </div>
-                  </div>
-                </Link>
                 <Link className="btn btn-primary" to="/login?role=driver" style={{ padding: '20px 24px', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 16 }}>
                   <span style={{ fontSize: '1.5em', fontWeight: 'bold', minWidth: '30px' }}>🚌</span>
                   <div>

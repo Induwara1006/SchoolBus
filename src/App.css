@@ -5,6 +5,31 @@
   text-align: center;
 }
 
+.badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.75em;
+  font-weight: 500;
+  background-color: #e5e7eb;
+  color: #374151;
+}
+
+.badge-warning {
+  background-color: #fbbf24;
+  color: #92400e;
+}
+
+.badge-success {
+  background-color: #10b981;
+  color: white;
+}
+
+.badge-error {
+  background-color: #ef4444;
+  color: white;
+}
+
 .logo {
   height: 6em;
   padding: 1.5em;

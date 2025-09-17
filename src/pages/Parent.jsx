@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { auth, db, functions } from "../firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, doc, getDoc, onSnapshot, query, where } from "firebase/firestore";
@@ -14,6 +15,7 @@ export default function Parent() {
   const [children, setChildren] = useState([]);
   const [busLocation, setBusLocation] = useState(null);
   const [payingFor, setPayingFor] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => setUser(u));
@@ -101,7 +103,16 @@ export default function Parent() {
 
   return (
     <div className="card">
-      <h2>Parent View</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <h2>Parent View</h2>
+        <button 
+          className="btn btn-primary" 
+          onClick={() => navigate('/find-drivers')}
+          style={{ fontSize: '0.9em', padding: '8px 16px' }}
+        >
+          🔍 Find Drivers
+        </button>
+      </div>
 
       {/* Status Overview */}
       <div style={{ marginBottom: 20 }}>

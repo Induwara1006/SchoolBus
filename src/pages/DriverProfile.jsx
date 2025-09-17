@@ -21,7 +21,8 @@ export default function DriverProfile() {
     hasFirstAid: false,
     hasInsurance: false,
     yearsExperience: '',
-    isAvailable: true
+    isAvailable: true,
+    role: 'driver' // Ensure role is always included
   });
   const navigate = useNavigate();
 
@@ -75,6 +76,7 @@ export default function DriverProfile() {
       const docRef = doc(db, 'users', user.uid);
       await updateDoc(docRef, {
         ...profile,
+        role: 'driver', // Ensure role is always set as driver
         profileUpdated: serverTimestamp(),
         // Ensure numeric fields are numbers
         capacity: profile.capacity ? parseInt(profile.capacity) : '',
@@ -83,6 +85,8 @@ export default function DriverProfile() {
       });
       
       alert('Profile updated successfully! 🎉');
+      // Navigate back to driver dashboard after successful save
+      navigate('/driver');
     } catch (error) {
       console.error('Error updating profile:', error);
       alert('Error updating profile. Please try again.');

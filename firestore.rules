@@ -1,0 +1,63 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if user is authenticated
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Users collection - allow reading all users for driver discovery
+    match /users/{uid} {
+      allow read: if isSignedIn(); // Allow reading all users for driver discovery
+      allow write: if isSignedIn() && request.auth.uid == uid; // Only write own profile
+    }
+
+    // Students collection - more permissive for testing
+    match /students/{studentId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Transport requests - parents can create, drivers can read/update their own
+    match /transportRequests/{requestId} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.parentId ||
+        request.auth.uid == resource.data.driverId
+      );
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.parentId;
+      allow update: if isSignedIn() && request.auth.uid == resource.data.driverId;
+    }
+
+    // Live locations for buses
+    match /liveLocations/{busId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Bus routes
+    match /busRoutes/{routeId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Messages
+    match /messages/{messageId} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.fromUserId ||
+        request.auth.uid == resource.data.toUserId
+      );
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.fromUserId;
+      allow update: if isSignedIn() && request.auth.uid == resource.data.toUserId;
+    }
+
+    // Invoices - read only for owners
+    match /invoices/{invoiceId} {
+      allow read: if isSignedIn() && resource.data.parentUid == request.auth.uid;
+      allow write: if false;
+    }
+
+    // Default deny for all other documents
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
