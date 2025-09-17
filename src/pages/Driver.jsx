@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { collection, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -10,6 +11,7 @@ export default function Driver() {
   const [students, setStudents] = useState([]);
   const [userRole, setUserRole] = useState('');
   const { isTracking, lastError, toggleTracking } = useDriverTracking();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, setUser);
@@ -66,7 +68,16 @@ export default function Driver() {
 
 		return (
 			<div className="card">
-				<h3>Driver View</h3>
+				<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+					<h3>Driver View</h3>
+					<button 
+						className="btn btn-primary" 
+						onClick={() => navigate('/driver-profile')}
+						style={{ fontSize: '0.9em', padding: '8px 16px' }}
+					>
+						⚙️ Complete Profile
+					</button>
+				</div>
 				<div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 12 }}>
 					<div className="field" style={{ flex: 1 }}>
 						<label className="muted">Bus ID</label>
