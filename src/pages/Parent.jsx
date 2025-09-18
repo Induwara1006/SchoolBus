@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth, db, functions } from "../firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, doc, getDoc, onSnapshot, query, where } from "firebase/firestore";
+import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet-defaulticon-compatibility";
@@ -40,36 +40,40 @@ export default function Parent() {
 
   useEffect(() => {
     if (!user) return;
-    (async () => {
-      const u = await getDoc(doc(db, "users", user.uid));
-      if (!u.exists()) return;
-      const studentIds = u.data().parentOf || [];
-      if (studentIds.length === 0) return;
+    
+    // Query students where parentId matches the current user's uid
+    const q = query(collection(db, "students"), where("parentId", "==", user.uid));
+    const unsubStudents = onSnapshot(q, (snap) => {
+      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setChildren(data);
 
-      const q = query(collection(db, "students"), where("__name__", "in", studentIds.slice(0, 10)));
-      // Firestore 'in' supports up to 10 items; in production, batch if more.
-      onSnapshot(q, (snap) => {
-        const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setChildren(data);
-
-        // Subscribe to bus locations for all children's buses
-        const busIds = [...new Set(data.map(child => child.busId).filter(Boolean))];
-        const locations = {};
-        
-        busIds.forEach(busId => {
-          const locRef = doc(db, "liveLocations", busId);
-          onSnapshot(locRef, (locSnap) => {
-            if (locSnap.exists()) {
-              locations[busId] = locSnap.data();
-              setBusLocations({...locations});
-            }
-          });
+      // Subscribe to bus locations for all children's buses
+      const busIds = [...new Set(data.map(child => child.busId).filter(Boolean))];
+      const locations = {};
+      
+      busIds.forEach(busId => {
+        const locRef = doc(db, "liveLocations", busId);
+        onSnapshot(locRef, (locSnap) => {
+          if (locSnap.exists()) {
+            locations[busId] = locSnap.data();
+            setBusLocations({...locations});
+          }
         });
       });
-    })();
+    });
+
+    return () => unsubStudents();
   }, [user]);
 
-  const center = busLocation ? [busLocation.lat, busLocation.lng] : [6.9271, 79.8612]; // default Colombo
+  // Get center location from any available bus location or default to Colombo
+  const center = useMemo(() => {
+    const availableLocations = Object.values(busLocations);
+    if (availableLocations.length > 0) {
+      const firstLocation = availableLocations[0];
+      return [firstLocation.lat, firstLocation.lng];
+    }
+    return [6.9271, 79.8612]; // default Colombo
+  }, [busLocations]);
 
   const createCheckout = useMemo(() => httpsCallable(functions, "createCheckoutSession"), []);
 
@@ -122,13 +126,22 @@ export default function Parent() {
     <div className="card">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <h2>Parent Dashboard</h2>
-        <button 
-          className="btn btn-primary" 
-          onClick={() => navigate('/find-drivers')}
-          style={{ fontSize: '0.9em', padding: '8px 16px' }}
-        >
-          🔍 Find Drivers
-        </button>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button 
+            className="btn" 
+            onClick={() => navigate('/subscriptions')}
+            style={{ fontSize: '0.9em', padding: '8px 16px' }}
+          >
+            💳 Subscriptions
+          </button>
+          <button 
+            className="btn btn-primary" 
+            onClick={() => navigate('/find-drivers')}
+            style={{ fontSize: '0.9em', padding: '8px 16px' }}
+          >
+            🔍 Find Drivers
+          </button>
+        </div>
       </div>
 
       {/* Children Status Cards */}

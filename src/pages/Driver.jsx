@@ -4,6 +4,7 @@ import { auth, db } from '../firebase';
 import { collection, doc, onSnapshot, query, updateDoc, where, addDoc, serverTimestamp } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import useDriverTracking from '../hooks/useDriverTracking';
+import ServiceAgreement from '../components/ServiceAgreement';
 
 export default function Driver() {
   const [user, setUser] = useState(null);
@@ -48,6 +49,9 @@ export default function Driver() {
     return () => unsub();
   }, [user]);
 
+  const [showAgreementModal, setShowAgreementModal] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+
   const updateStudentStatus = async (studentId, newStatus) => {
     try {
       await updateDoc(doc(db, 'students', studentId), {
@@ -68,72 +72,81 @@ export default function Driver() {
     { value: 'at-school', label: '🏫 At School', color: '#10b981' },
     { value: 'returning', label: '🔄 Returning Home', color: '#f97316' },
     { value: 'dropped-off', label: '✅ Dropped Off', color: '#059669' }
-  ];	const saveBusId = () => {
-		localStorage.setItem('driver.busId', busId.trim());
-		alert('Bus ID saved');
-	};
+  ];
 
-	const toggleStudentStatus = async (student) => {
-		const newStatus = student.status === 'in-bus' ? 'not-in-bus' : 'in-bus';
-		try {
-			await updateDoc(doc(db, 'students', student.id), { status: newStatus });
-		} catch (e) {
-			alert(`Failed to update student status: ${e.message}`);
-		}
-	};
+  const saveBusId = () => {
+    localStorage.setItem('driver.busId', busId.trim());
+    alert('Bus ID saved');
+  };
 
-	const handleRequestResponse = async (requestId, action) => {
-		try {
-			await updateDoc(doc(db, 'transportRequests', requestId), {
-				status: action,
-				respondedAt: serverTimestamp()
-			});
+  const toggleStudentStatus = async (student) => {
+    const newStatus = student.status === 'in-bus' ? 'not-in-bus' : 'in-bus';
+    try {
+      await updateDoc(doc(db, 'students', student.id), { status: newStatus });
+    } catch (e) {
+      alert(`Failed to update student status: ${e.message}`);
+    }
+  };
 
-			if (action === 'accepted') {
-				alert('Request accepted! You can now contact the parent to discuss terms and finalize the agreement.');
-			} else {
-				alert('Request declined.');
-			}
-		} catch (error) {
-			console.error('Error updating request:', error);
-			alert('Failed to update request. Please try again.');
-		}
-	};
+  const handleRequestResponse = async (requestId, action) => {
+    try {
+      if (action === 'accepted') {
+        // Find the request data
+        const request = requests.find(r => r.id === requestId);
+        setSelectedRequest({ ...request, requestId });
+        setShowAgreementModal(true);
+      } else {
+        await updateDoc(doc(db, 'transportRequests', requestId), {
+          status: action,
+          respondedAt: serverTimestamp()
+        });
+      }
+    } catch (error) {
+      console.error('Error responding to request:', error);
+      alert('Failed to respond to request');
+    }
+  };
 
-	const addStudentToBus = async (request) => {
-		if (!busId) {
-			alert('Please set your Bus ID first.');
-			return;
-		}
+  const handleAgreementCreated = async (agreement) => {
+    setShowAgreementModal(false);
+    setSelectedRequest(null);
+    alert('Service agreement created! Parent will be notified to review and sign.');
+  };
 
-		try {
-			// Add student to the students collection
-			await addDoc(collection(db, 'students'), {
-				fullName: request.childName,
-				age: request.childAge || '',
-				busId: busId,
-				parentId: request.parentId,
-				pickupAddress: request.pickupAddress,
-				dropoffAddress: request.dropoffAddress,
-				status: 'at-home',
-				monthlyFee: 2500, // Default fee, can be customized
-				createdAt: serverTimestamp(),
-				lastStatusUpdate: serverTimestamp()
-			});
+  const addStudentToBus = async (request) => {
+    if (!busId) {
+      alert('Please set your Bus ID first.');
+      return;
+    }
 
-			// Update request status
-			await updateDoc(doc(db, 'transportRequests', request.id), {
-				status: 'completed',
-				studentAdded: true,
-				completedAt: serverTimestamp()
-			});
+    try {
+      // Add student to the students collection
+      await addDoc(collection(db, 'students'), {
+        fullName: request.childName,
+        age: request.childAge || '',
+        busId: busId,
+        parentId: request.parentId,
+        pickupAddress: request.pickupAddress,
+        dropoffAddress: request.dropoffAddress,
+        status: 'at-home',
+        monthlyFee: 2500, // Default fee, can be customized
+        createdAt: serverTimestamp(),
+        lastStatusUpdate: serverTimestamp()
+      });
 
-			alert(`${request.childName} has been added to your bus route!`);
-		} catch (error) {
-			console.error('Error adding student:', error);
-			alert('Failed to add student. Please try again.');
-		}
-	};
+      // Update request status
+      await updateDoc(doc(db, 'transportRequests', request.id), {
+        status: 'completed',
+        studentAdded: true,
+        completedAt: serverTimestamp()
+      });
+
+      alert(`${request.childName} has been added to your bus route!`);
+    } catch (error) {
+      console.error('Error adding student:', error);
+      alert('Failed to add student. Please try again.');
+    }
+  };
 
 	if (userRole !== 'driver') {
 		return (
@@ -153,7 +166,8 @@ export default function Driver() {
 		);
 	}
 
-		return (
+	return (
+		<div>
 			<div className="card">
 				<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
 					<h3>Driver View</h3>
@@ -304,9 +318,10 @@ export default function Driver() {
 					</div>
 				)}
 
-				<p className="muted" style={{ marginTop: 16 }}>
-					💡 Update student status in real-time to keep parents informed. Location tracking shows bus position on parent dashboards.
-				</p>
-			</div>
-		);
+                <p className="muted" style={{ marginTop: 16 }}>
+                    💡 Update student status in real-time to keep parents informed. Location tracking shows bus position on parent dashboards.
+                </p>
+            </div>
+        </div>
+    );
 }

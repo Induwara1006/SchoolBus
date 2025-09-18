@@ -4,6 +4,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './firebase';
 import { ThemeProvider } from './contexts/ThemeContext';
 import ThemeToggle from './components/ThemeToggle';
+import SubscriptionDashboard from './components/SubscriptionDashboard';
 import './App.css';
 import Login from './pages/Login.jsx';
 import Parent from './pages/Parent.jsx';
@@ -107,12 +108,15 @@ function AppContent() {
                 <>
                   <Link to="/driver">Dashboard</Link>
                   <Link to="/driver-profile">Profile</Link>
+                  <Link to="/subscriptions">💳 Subscriptions</Link>
                 </>
               )}
               
               {user && userRole === 'parent' && (
                 <>
                   <Link to="/parent">Dashboard</Link>
+                  <Link to="/find-drivers">Find Drivers</Link>
+                  <Link to="/subscriptions">💳 Subscriptions</Link>
                 </>
               )}
               
@@ -168,6 +172,7 @@ function AppContent() {
         <Route path="/driver-profile" element={<DriverProfile />} />
         <Route path="/parent" element={<Parent />} />
         <Route path="/driver" element={<Driver />} />
+        <Route path="/subscriptions" element={<SubscriptionDashboard />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       </div>

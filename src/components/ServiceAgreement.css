@@ -1,0 +1,160 @@
+.service-agreement-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.agreement-content {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 800px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 40px var(--shadow);
+}
+
+.agreement-form {
+  margin-top: 20px;
+}
+
+.form-section {
+  margin-bottom: 24px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.form-section h3 {
+  margin: 0 0 16px 0;
+  color: var(--primary);
+  font-size: 1.1em;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.field input,
+.field select,
+.field textarea {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text);
+  font-family: inherit;
+  transition: all 0.3s ease;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+.terms-textarea {
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.agreement-summary {
+  background: var(--button-bg);
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.agreement-summary h3 {
+  margin: 0 0 12px 0;
+  color: var(--primary);
+}
+
+.summary-details p {
+  margin: 8px 0;
+  display: flex;
+  justify-content: space-between;
+}
+
+.summary-details strong {
+  color: var(--text);
+}
+
+.agreement-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.agreement-actions .btn {
+  min-width: 120px;
+}
+
+/* Checkbox styling */
+.field input[type="checkbox"] {
+  width: auto;
+  margin-right: 8px;
+}
+
+.field label:has(input[type="checkbox"]) {
+  flex-direction: row;
+  align-items: center;
+}
+
+/* Dark theme adjustments */
+.dark-theme .service-agreement-modal {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.dark-theme .terms-textarea {
+  background: #1a1a1a;
+  color: #e5e7eb;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 640px) {
+  .service-agreement-modal {
+    padding: 10px;
+  }
+  
+  .agreement-content {
+    padding: 16px;
+    max-height: 95vh;
+  }
+  
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .agreement-actions {
+    flex-direction: column;
+  }
+}
