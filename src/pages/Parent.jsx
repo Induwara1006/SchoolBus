@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth, db, functions } from "../firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
+import { collection, doc, onSnapshot, query, where, addDoc, serverTimestamp } from "firebase/firestore";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet-defaulticon-compatibility";
@@ -26,17 +26,38 @@ export default function Parent() {
   const [children, setChildren] = useState([]);
   const [busLocations, setBusLocations] = useState({});
   const [payingFor, setPayingFor] = useState(null);
+  const [rideRequests, setRideRequests] = useState([]);
+  const [showRequestForm, setShowRequestForm] = useState(false);
+  const [requestData, setRequestData] = useState({
+    childId: '',
+    pickupAddress: '',
+    dropoffAddress: '',
+    requestType: 'regular', // regular, emergency
+    notes: ''
+  });
   const navigate = useNavigate();
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => setUser(u));
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      // Clear role if user changed
+      if (!u) {
+        setUserRole('');
+        localStorage.removeItem('user.role');
+      }
+    });
     return () => unsub();
   }, []);
 
   useEffect(() => {
-    const role = localStorage.getItem('user.role') || '';
-    setUserRole(role);
-  }, []);
+    // Only set role if we have a user
+    if (user) {
+      const role = localStorage.getItem('user.role') || '';
+      setUserRole(role);
+    } else {
+      setUserRole('');
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -45,6 +66,7 @@ export default function Parent() {
     const q = query(collection(db, "students"), where("parentId", "==", user.uid));
     const unsubStudents = onSnapshot(q, (snap) => {
       const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      console.log("Parent: Loaded students:", data);
       setChildren(data);
 
       // Subscribe to bus locations for all children's buses
@@ -60,9 +82,24 @@ export default function Parent() {
           }
         });
       });
+    }, (error) => {
+      console.error("Error loading students:", error);
     });
 
-    return () => unsubStudents();
+    // Query ride requests for this parent
+    const requestsQuery = query(collection(db, "rideRequests"), where("parentId", "==", user.uid));
+    const unsubRequests = onSnapshot(requestsQuery, (snap) => {
+      const requests = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      console.log("Parent: Loaded ride requests:", requests);
+      setRideRequests(requests);
+    }, (error) => {
+      console.error("Error listening to ride requests:", error);
+    });
+
+    return () => {
+      unsubStudents();
+      unsubRequests();
+    };
   }, [user]);
 
   // Get center location from any available bus location or default to Colombo
@@ -76,6 +113,42 @@ export default function Parent() {
   }, [busLocations]);
 
   const createCheckout = useMemo(() => httpsCallable(functions, "createCheckoutSession"), []);
+
+  const getStatusDisplay = (status) => {
+    const displays = {
+      "at-home": "At Home",
+      "picked-up": "Picked Up",
+      "in-transit-to-school": "Going to School", 
+      "dropped-at-school": "At School",
+      "in-transit-to-home": "Going Home",
+      "dropped-at-home": "Dropped at Home"
+    };
+    return displays[status] || status;
+  };
+
+  const getStatusColor = (status) => {
+    const colors = {
+      "at-home": "#6c757d",
+      "picked-up": "#fd7e14", 
+      "in-transit-to-school": "#0d6efd",
+      "dropped-at-school": "#198754",
+      "in-transit-to-home": "#0d6efd", 
+      "dropped-at-home": "#198754"
+    };
+    return colors[status] || "#6c757d";
+  };
+
+  const getStatusIcon = (status) => {
+    const icons = {
+      "at-home": "🏠",
+      "picked-up": "🚌",
+      "in-transit-to-school": "🚌➡️🏫", 
+      "dropped-at-school": "🏫",
+      "in-transit-to-home": "🚌➡️🏠",
+      "dropped-at-home": "✅"
+    };
+    return icons[status] || "📍";
+  };
 
   const handlePay = async (student) => {
     try {
@@ -98,6 +171,91 @@ export default function Parent() {
       alert(e.message || "Payment init failed");
     } finally {
       setPayingFor(null);
+    }
+  };
+
+  const handleRequestSubmit = async (e) => {
+    e.preventDefault();
+    if (!requestData.childId || !requestData.pickupAddress || !requestData.dropoffAddress) {
+      alert("Please fill in all required fields");
+      return;
+    }
+
+    try {
+      const selectedChild = children.find(c => c.id === requestData.childId);
+      console.log("Creating ride request with data:", {
+        ...requestData,
+        parentId: user.uid,
+        parentEmail: user.email,
+        childName: selectedChild?.fullName || 'Unknown'
+      });
+      
+      const docRef = await addDoc(collection(db, "rideRequests"), {
+        ...requestData,
+        parentId: user.uid,
+        parentEmail: user.email,
+        childName: selectedChild?.fullName || 'Unknown',
+        status: 'pending',
+        createdAt: serverTimestamp(),
+      });
+      
+      console.log("Ride request created with ID:", docRef.id);
+      
+      // Reset form
+      setRequestData({
+        childId: '',
+        pickupAddress: '',
+        dropoffAddress: '',
+        requestType: 'regular',
+        notes: ''
+      });
+      setShowRequestForm(false);
+      alert("Ride request sent successfully!");
+    } catch (error) {
+      console.error("Error sending request:", error);
+      alert("Failed to send request. Please try again.");
+    }
+  };
+
+  const getRequestStatusColor = (status) => {
+    const colors = {
+      'pending': '#f59e0b',
+      'approved': '#10b981',
+      'rejected': '#ef4444',
+      'completed': '#6b7280'
+    };
+    return colors[status] || '#6b7280';
+  };
+
+  const getRequestStatusIcon = (status) => {
+    const icons = {
+      'pending': '⏳',
+      'approved': '✅',
+      'rejected': '❌',
+      'completed': '🏁'
+    };
+    return icons[status] || '📋';
+  };
+
+  const createTestStudent = async () => {
+    try {
+      const testStudent = {
+        fullName: "Test Student",
+        age: 8,
+        school: "Test School",
+        parentId: user.uid,
+        status: "at-home",
+        monthlyFee: 2500,
+        createdAt: serverTimestamp()
+      };
+      
+      console.log("Creating test student:", testStudent);
+      const docRef = await addDoc(collection(db, "students"), testStudent);
+      console.log("Test student created with ID:", docRef.id);
+      alert("Test student created successfully!");
+    } catch (error) {
+      console.error("Error creating test student:", error);
+      alert("Failed to create test student: " + error.message);
     }
   };
 
@@ -129,6 +287,13 @@ export default function Parent() {
         <div style={{ display: 'flex', gap: '12px' }}>
           <button 
             className="btn" 
+            onClick={() => setShowRequestForm(!showRequestForm)}
+            style={{ fontSize: '0.9em', padding: '8px 16px', backgroundColor: '#10b981', color: 'white' }}
+          >
+            🚌 Request Ride
+          </button>
+          <button 
+            className="btn" 
             onClick={() => navigate('/subscriptions')}
             style={{ fontSize: '0.9em', padding: '8px 16px' }}
           >
@@ -142,6 +307,216 @@ export default function Parent() {
             🔍 Find Drivers
           </button>
         </div>
+      </div>
+
+      {/* Debug Information */}
+      {user && (
+        <div style={{ 
+          background: '#f0f0f0', 
+          padding: '12px', 
+          borderRadius: '4px', 
+          marginBottom: '16px',
+          fontSize: '0.9em',
+          fontFamily: 'monospace'
+        }}>
+          <strong>Debug Info:</strong><br/>
+          User ID: {user.uid}<br/>
+          Children Count: {children.length}<br/>
+          Requests Count: {rideRequests.length}<br/>
+          Current Role: {userRole}
+          {children.length === 0 && (
+            <div style={{ marginTop: '8px' }}>
+              <button 
+                onClick={createTestStudent}
+                style={{ 
+                  padding: '4px 8px', 
+                  fontSize: '0.8em',
+                  backgroundColor: '#10b981',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Create Test Student
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Ride Request Form */}
+      {showRequestForm && (
+        <div className="card" style={{ marginBottom: 24, border: '2px solid #10b981' }}>
+          <h3>🚌 Request a Ride</h3>
+          <form onSubmit={handleRequestSubmit}>
+            <div style={{ display: 'grid', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>
+                  Select Child *
+                </label>
+                <select 
+                  value={requestData.childId} 
+                  onChange={(e) => setRequestData({...requestData, childId: e.target.value})}
+                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+                  required
+                >
+                  <option value="">Choose a child...</option>
+                  {children.map(child => (
+                    <option key={child.id} value={child.id}>{child.fullName}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>
+                  Pickup Address *
+                </label>
+                <input 
+                  type="text"
+                  value={requestData.pickupAddress}
+                  onChange={(e) => setRequestData({...requestData, pickupAddress: e.target.value})}
+                  placeholder="Enter pickup location..."
+                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+                  required
+                />
+              </div>
+              
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>
+                  Drop-off Address *
+                </label>
+                <input 
+                  type="text"
+                  value={requestData.dropoffAddress}
+                  onChange={(e) => setRequestData({...requestData, dropoffAddress: e.target.value})}
+                  placeholder="Enter drop-off location..."
+                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+                  required
+                />
+              </div>
+              
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>
+                  Request Type
+                </label>
+                <select 
+                  value={requestData.requestType} 
+                  onChange={(e) => setRequestData({...requestData, requestType: e.target.value})}
+                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+                >
+                  <option value="regular">Regular Transport</option>
+                  <option value="emergency">Emergency Request</option>
+                </select>
+              </div>
+              
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>
+                  Additional Notes
+                </label>
+                <textarea 
+                  value={requestData.notes}
+                  onChange={(e) => setRequestData({...requestData, notes: e.target.value})}
+                  placeholder="Any special instructions or notes..."
+                  rows={3}
+                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc', resize: 'vertical' }}
+                />
+              </div>
+              
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button type="submit" className="btn" style={{ backgroundColor: '#10b981', color: 'white' }}>
+                  Send Request
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => setShowRequestForm(false)}
+                  className="btn"
+                  style={{ backgroundColor: '#6b7280', color: 'white' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Pending Ride Requests */}
+      <div style={{ marginBottom: 24 }}>
+        <h3>Your Ride Requests ({rideRequests.length})</h3>
+        {rideRequests.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "20px", color: "#666" }}>
+            No ride requests yet. Click "Request Ride" to send your first request.
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gap: '12px' }}>
+            {rideRequests.map((request) => (
+              <div key={request.id} className="card" style={{ 
+                padding: '16px',
+                border: `2px solid ${getRequestStatusColor(request.status)}20`,
+                borderLeft: `4px solid ${getRequestStatusColor(request.status)}`
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '1.1em', fontWeight: '600' }}>
+                        {request.childName}
+                      </span>
+                      <span style={{ 
+                        padding: '4px 8px',
+                        borderRadius: '12px',
+                        backgroundColor: getRequestStatusColor(request.status),
+                        color: 'white',
+                        fontSize: '0.8em',
+                        fontWeight: '500',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}>
+                        <span>{getRequestStatusIcon(request.status)}</span>
+                        <span>{request.status.toUpperCase()}</span>
+                      </span>
+                      {request.requestType === 'emergency' && (
+                        <span style={{ 
+                          padding: '4px 8px',
+                          borderRadius: '12px',
+                          backgroundColor: '#ef4444',
+                          color: 'white',
+                          fontSize: '0.8em',
+                          fontWeight: '500'
+                        }}>
+                          🚨 EMERGENCY
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="muted" style={{ fontSize: '0.9em' }}>
+                      <div><strong>From:</strong> {request.pickupAddress}</div>
+                      <div><strong>To:</strong> {request.dropoffAddress}</div>
+                      {request.notes && (
+                        <div><strong>Notes:</strong> {request.notes}</div>
+                      )}
+                      <div style={{ fontSize: '0.8em', color: '#666', marginTop: '8px' }}>
+                        🕒 Requested: {request.createdAt?.toDate?.().toLocaleString?.() || 'Unknown'}
+                      </div>
+                      {request.responseMessage && (
+                        <div style={{ 
+                          marginTop: '8px', 
+                          padding: '8px', 
+                          backgroundColor: '#f3f4f6', 
+                          borderRadius: '4px',
+                          fontSize: '0.9em'
+                        }}>
+                          <strong>Driver Response:</strong> {request.responseMessage}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Children Status Cards */}
@@ -170,16 +545,19 @@ export default function Parent() {
                       </div>
                       
                       <div style={{ 
-                        display: 'inline-block',
-                        padding: '4px 8px',
-                        borderRadius: '12px',
-                        backgroundColor: config.color,
+                        padding: '6px 12px',
+                        borderRadius: '16px',
+                        backgroundColor: getStatusColor(child.status || "at-home"),
                         color: 'white',
-                        fontSize: '0.8em',
+                        fontSize: '0.85em',
                         fontWeight: '500',
-                        marginBottom: '8px'
+                        marginBottom: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
                       }}>
-                        {config.label}
+                        <span>{getStatusIcon(child.status || "at-home")}</span>
+                        <span>{getStatusDisplay(child.status || "at-home")}</span>
                       </div>
                       
                       <div className="muted" style={{ fontSize: '0.9em' }}>
@@ -188,9 +566,14 @@ export default function Parent() {
                         {child.busId && (
                           <div>Bus ID: {child.busId}</div>
                         )}
+                        {child.lastStatusUpdate && (
+                          <div style={{ fontSize: '0.8em', color: '#666', marginTop: '4px' }}>
+                            🕒 Last updated: {child.lastStatusUpdate?.toDate?.().toLocaleString?.() || 'Unknown'}
+                          </div>
+                        )}
                         {busLocation && (
-                          <div>
-                            📍 Last updated: {busLocation.updatedAt?.toDate?.().toLocaleTimeString?.() || 'Unknown'}
+                          <div style={{ fontSize: '0.8em', color: '#666' }}>
+                            📍 Bus location updated: {busLocation.updatedAt?.toDate?.().toLocaleTimeString?.() || 'Unknown'}
                           </div>
                         )}
                       </div>

@@ -13,10 +13,30 @@ service cloud.firestore {
       allow write: if isSignedIn() && request.auth.uid == uid; // Only write own profile
     }
 
-    // Students collection - more permissive for testing
+    // Students collection - parents can read their children, drivers can read/update students on their bus
     match /students/{studentId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read: if isSignedIn() && (
+        // Parent of this student
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.parentOf hasAny [studentId])
+        ||
+        // Driver of this student's bus
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.driverOfBusId == resource.data.busId)
+        ||
+        // Allow all reads for testing (remove in production)
+        true
+      );
+      
+      // Allow driver to update student status, lastStatusUpdate, and updatedBy on their bus
+      allow update: if isSignedIn() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.driverOfBusId == resource.data.busId
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(["status", "lastStatusUpdate", "updatedBy"])
+        ||
+        // Allow all writes for testing (remove in production)
+        true
+      );
+      
+      allow create, delete: if isSignedIn(); // For testing
     }
 
     // Transport requests - parents can create, drivers can read/update their own

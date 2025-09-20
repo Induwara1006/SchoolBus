@@ -1,327 +1,506 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { auth, db } from '../firebase';
-import { collection, doc, onSnapshot, query, updateDoc, where, addDoc, serverTimestamp } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
-import useDriverTracking from '../hooks/useDriverTracking';
-import ServiceAgreement from '../components/ServiceAgreement';
+﻿import { useEffect, useState } from "react";
+import { auth, db } from "../firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { collection, onSnapshot, query, updateDoc, doc, serverTimestamp, addDoc } from "firebase/firestore";
 
 export default function Driver() {
   const [user, setUser] = useState(null);
-  const [busId, setBusId] = useState('');
   const [students, setStudents] = useState([]);
-  const [userRole, setUserRole] = useState('');
-  const [requests, setRequests] = useState([]);
-  const { isTracking, lastError, toggleTracking } = useDriverTracking();
-  const navigate = useNavigate();
+  const [rideRequests, setRideRequests] = useState([]);
+  const [activeTab, setActiveTab] = useState('students'); // 'students' or 'requests'
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, setUser);
+    const unsub = onAuthStateChanged(auth, (u) => setUser(u));
     return () => unsub();
   }, []);
 
-  useEffect(() => {
-    const saved = localStorage.getItem('driver.busId') || '';
-    const role = localStorage.getItem('user.role') || '';
-    setBusId(saved);
-    setUserRole(role);
-  }, []);
-
-  // Load students for this driver's bus
-  useEffect(() => {
-    if (!user || !busId) return;
-    const q = query(collection(db, 'students'), where('busId', '==', busId));
-    const unsub = onSnapshot(q, (snap) => {
-      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setStudents(data);
-    });
-    return () => unsub();
-  }, [user, busId]);
-
-  // Load transport requests for this driver
   useEffect(() => {
     if (!user) return;
-    const q = query(collection(db, 'transportRequests'), where('driverId', '==', user.uid));
-    const unsub = onSnapshot(q, (snap) => {
-      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setRequests(data.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds));
+    
+    const q = query(collection(db, "students"));
+    const unsub = onSnapshot(q, (s) => {
+      const allStudents = s.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setStudents(allStudents);
     });
-    return () => unsub();
-  }, [user]);
 
-  const [showAgreementModal, setShowAgreementModal] = useState(false);
-  const [selectedRequest, setSelectedRequest] = useState(null);
+    // Listen for ride requests
+    const requestsQuery = query(collection(db, "rideRequests"));
+    const unsubRequests = onSnapshot(requestsQuery, (snap) => {
+      const requests = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      console.log("Driver: Loaded ride requests:", requests);
+      setRideRequests(requests);
+    }, (error) => {
+      console.error("Driver: Error listening to ride requests:", error);
+    });
+
+    return () => {
+      unsub();
+      unsubRequests();
+    };
+  }, [user]);
 
   const updateStudentStatus = async (studentId, newStatus) => {
     try {
-      await updateDoc(doc(db, 'students', studentId), {
+      await updateDoc(doc(db, "students", studentId), {
         status: newStatus,
-        lastStatusUpdate: serverTimestamp()
+        lastStatusUpdate: serverTimestamp(),
+        updatedBy: user.uid
       });
     } catch (error) {
-      console.error('Error updating student status:', error);
-      alert('Failed to update student status');
+      console.error("Error updating student status:", error);
     }
   };
 
-  const statusOptions = [
-    { value: 'at-home', label: '🏠 At Home', color: '#6b7280' },
-    { value: 'waiting-pickup', label: '⏰ Waiting for Pickup', color: '#f59e0b' },
-    { value: 'picked-up', label: '🚌 Picked Up', color: '#3b82f6' },
-    { value: 'in-transit', label: '🚛 In Transit', color: '#8b5cf6' },
-    { value: 'at-school', label: '🏫 At School', color: '#10b981' },
-    { value: 'returning', label: '🔄 Returning Home', color: '#f97316' },
-    { value: 'dropped-off', label: '✅ Dropped Off', color: '#059669' }
-  ];
-
-  const saveBusId = () => {
-    localStorage.setItem('driver.busId', busId.trim());
-    alert('Bus ID saved');
+  const getStatusOptions = (currentStatus) => {
+    const allStatuses = ["at-home", "picked-up", "in-transit-to-school", "dropped-at-school", "in-transit-to-home", "dropped-at-home"];
+    return allStatuses.filter(status => status !== currentStatus);
   };
 
-  const toggleStudentStatus = async (student) => {
-    const newStatus = student.status === 'in-bus' ? 'not-in-bus' : 'in-bus';
+  const getStatusDisplay = (status) => {
+    const displays = {
+      "at-home": "At Home",
+      "picked-up": "Picked Up", 
+      "in-transit-to-school": "Going to School",
+      "dropped-at-school": "At School",
+      "in-transit-to-home": "Going Home",
+      "dropped-at-home": "Dropped at Home"
+    };
+    return displays[status] || status;
+  };
+
+  const getStatusColor = (status) => {
+    const colors = {
+      "at-home": "#6c757d",
+      "picked-up": "#fd7e14",
+      "in-transit-to-school": "#0d6efd", 
+      "dropped-at-school": "#198754",
+      "in-transit-to-home": "#0d6efd",
+      "dropped-at-home": "#198754"
+    };
+    return colors[status] || "#6c757d";
+  };
+
+  const getStatusIcon = (status) => {
+    const icons = {
+      "at-home": "🏠",
+      "picked-up": "🚌",
+      "in-transit-to-school": "🚌➡️🏫",
+      "dropped-at-school": "🏫", 
+      "in-transit-to-home": "🚌➡️🏠",
+      "dropped-at-home": "✅"
+    };
+    return icons[status] || "📍";
+  };
+
+  const handleRequestResponse = async (requestId, status, responseMessage = '') => {
     try {
-      await updateDoc(doc(db, 'students', student.id), { status: newStatus });
-    } catch (e) {
-      alert(`Failed to update student status: ${e.message}`);
-    }
-  };
-
-  const handleRequestResponse = async (requestId, action) => {
-    try {
-      if (action === 'accepted') {
-        // Find the request data
-        const request = requests.find(r => r.id === requestId);
-        setSelectedRequest({ ...request, requestId });
-        setShowAgreementModal(true);
-      } else {
-        await updateDoc(doc(db, 'transportRequests', requestId), {
-          status: action,
-          respondedAt: serverTimestamp()
-        });
-      }
-    } catch (error) {
-      console.error('Error responding to request:', error);
-      alert('Failed to respond to request');
-    }
-  };
-
-  const handleAgreementCreated = async (agreement) => {
-    setShowAgreementModal(false);
-    setSelectedRequest(null);
-    alert('Service agreement created! Parent will be notified to review and sign.');
-  };
-
-  const addStudentToBus = async (request) => {
-    if (!busId) {
-      alert('Please set your Bus ID first.');
-      return;
-    }
-
-    try {
-      // Add student to the students collection
-      await addDoc(collection(db, 'students'), {
-        fullName: request.childName,
-        age: request.childAge || '',
-        busId: busId,
-        parentId: request.parentId,
-        pickupAddress: request.pickupAddress,
-        dropoffAddress: request.dropoffAddress,
-        status: 'at-home',
-        monthlyFee: 2500, // Default fee, can be customized
-        createdAt: serverTimestamp(),
-        lastStatusUpdate: serverTimestamp()
+      console.log("Driver responding to request:", requestId, "with status:", status);
+      await updateDoc(doc(db, "rideRequests", requestId), {
+        status,
+        responseMessage,
+        respondedAt: serverTimestamp(),
+        respondedBy: user.uid
       });
-
-      // Update request status
-      await updateDoc(doc(db, 'transportRequests', request.id), {
-        status: 'completed',
-        studentAdded: true,
-        completedAt: serverTimestamp()
-      });
-
-      alert(`${request.childName} has been added to your bus route!`);
+      console.log("Request response saved successfully");
     } catch (error) {
-      console.error('Error adding student:', error);
-      alert('Failed to add student. Please try again.');
+      console.error("Error updating request:", error);
+      alert("Failed to update request. Please try again.");
     }
   };
 
-	if (userRole !== 'driver') {
-		return (
-			<div className="card">
-				<h3>Driver View</h3>
-				<p className="muted">Please select "Driver" role on the <a href="/login">Login page</a> to access this area.</p>
-			</div>
-		);
-	}
+  const getRequestStatusColor = (status) => {
+    const colors = {
+      'pending': '#f59e0b',
+      'approved': '#10b981',
+      'rejected': '#ef4444',
+      'completed': '#6b7280'
+    };
+    return colors[status] || '#6b7280';
+  };
 
-	if (!user) {
-		return (
-			<div className="card">
-				<h3>Driver View</h3>
-				<p className="muted">Please <a href="/login">login</a> to access the driver dashboard.</p>
-			</div>
-		);
-	}
+  const getRequestStatusIcon = (status) => {
+    const icons = {
+      'pending': '⏳',
+      'approved': '✅',
+      'rejected': '❌',
+      'completed': '🏁'
+    };
+    return icons[status] || '📋';
+  };
 
-	return (
-		<div>
-			<div className="card">
-				<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-					<h3>Driver View</h3>
-					<button 
-						className="btn btn-primary" 
-						onClick={() => navigate('/driver-profile')}
-						style={{ fontSize: '0.9em', padding: '8px 16px' }}
-					>
-						⚙️ Complete Profile
-					</button>
-				</div>
+  const pendingRequests = rideRequests.filter(r => r.status === 'pending');
+  const approvedRequests = rideRequests.filter(r => r.status === 'approved');
+  const allRequests = rideRequests.filter(r => r.status !== 'pending');
 
-				{/* Transport Requests Section */}
-				{requests.length > 0 && (
-					<div style={{ marginBottom: 24 }}>
-						<h4>📝 Transport Requests ({requests.filter(r => r.status === 'pending').length} pending)</h4>
-						{requests.slice(0, 5).map((request) => (
-							<div key={request.id} className="card" style={{ marginBottom: 12, padding: 16 }}>
-								<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-									<div style={{ flex: 1 }}>
-										<h5 style={{ margin: 0, marginBottom: 8 }}>
-											{request.childName} (Parent: {request.parentName})
-										</h5>
-										<div style={{ fontSize: '0.9em', color: '#666', marginBottom: 8 }}>
-											<div>📍 Pickup: {request.pickupAddress}</div>
-											<div>🏫 Drop-off: {request.dropoffAddress}</div>
-											{request.preferredTime && <div>⏰ Preferred time: {request.preferredTime}</div>}
-											{request.additionalNotes && <div>📝 Notes: {request.additionalNotes}</div>}
-										</div>
-										<span className={`badge ${
-											request.status === 'pending' ? 'badge-warning' : 
-											request.status === 'accepted' ? 'badge-success' : 'badge-error'
-										}`}>
-											{request.status.charAt(0).toUpperCase() + request.status.slice(1)}
-										</span>
-									</div>
-									
-									<div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 120 }}>
-										{request.status === 'pending' && (
-											<>
-												<button 
-													className="btn btn-primary" 
-													onClick={() => handleRequestResponse(request.id, 'accepted')}
-													style={{ fontSize: '0.8em', padding: '6px 12px' }}
-												>
-													✅ Accept
-												</button>
-												<button 
-													className="btn" 
-													onClick={() => handleRequestResponse(request.id, 'declined')}
-													style={{ fontSize: '0.8em', padding: '6px 12px' }}
-												>
-													❌ Decline
-												</button>
-											</>
-										)}
-										{request.status === 'accepted' && !request.studentAdded && (
-											<button 
-												className="btn btn-primary" 
-												onClick={() => addStudentToBus(request)}
-												style={{ fontSize: '0.8em', padding: '6px 12px' }}
-											>
-												➕ Add to Bus
-											</button>
-										)}
-									</div>
-								</div>
-							</div>
-						))}
-					</div>
-				)}
+  // Test function to create a dummy request for testing
+  const createTestRequest = async () => {
+    try {
+      console.log("Creating test request...");
+      const testRequest = {
+        childId: "test-child-id",
+        childName: "Test Child",
+        parentId: "test-parent-id",
+        parentEmail: "test@parent.com",
+        pickupAddress: "123 Test Street",
+        dropoffAddress: "Test School",
+        requestType: "regular",
+        notes: "This is a test request from driver interface",
+        status: "pending",
+        createdAt: serverTimestamp()
+      };
+      
+      const docRef = await addDoc(collection(db, "rideRequests"), testRequest);
+      console.log("Test request created with ID:", docRef.id);
+      alert("Test request created successfully!");
+    } catch (error) {
+      console.error("Error creating test request:", error);
+      alert("Failed to create test request: " + error.message);
+    }
+  };
 
-				<div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 12 }}>
-					<div className="field" style={{ flex: 1 }}>
-						<label className="muted">Bus ID</label>
-						<input className="input" value={busId} onChange={(e) => setBusId(e.target.value)} placeholder="e.g., bus-001" />
-					</div>
-					<button className="btn" onClick={saveBusId}>Save</button>
-				</div>
-				
-				<div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
-					<button className="btn btn-primary" onClick={toggleTracking}>{isTracking ? 'Stop' : 'Start'} Tracking</button>
-					<span className="muted">Status: {isTracking ? 'Tracking active' : 'Tracking stopped'}</span>
-				</div>
-				{lastError && <p style={{ color: 'salmon', marginTop: 8 }}>Error: {String(lastError)}</p>}
+  if (!user) return <div className="container">Please sign in.</div>;
 
-				<h4 style={{ marginTop: 24, marginBottom: 12 }}>Students on Bus {busId || '(set Bus ID first)'}</h4>
-				{students.length === 0 ? (
-					<p className="muted">No students assigned to this bus.</p>
-				) : (
-					<div style={{ display: 'grid', gap: '12px' }}>
-						{students.map((student) => {
-							const currentStatus = student.status || 'at-home';
-							const statusOption = statusOptions.find(opt => opt.value === currentStatus) || statusOptions[0];
-							
-							return (
-								<div key={student.id} className="card" style={{ 
-									padding: '12px',
-									border: `2px solid ${statusOption.color}20`,
-									borderLeft: `4px solid ${statusOption.color}`
-								}}>
-									<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-										<div style={{ flex: 1 }}>
-											<div style={{ fontWeight: '600', marginBottom: '4px' }}>
-												{student.fullName}
-											</div>
-											<div style={{ fontSize: '0.9em', color: 'var(--muted)', marginBottom: '8px' }}>
-												<div>Age: {student.age || 'Not specified'}</div>
-												<div>📍 Pickup: {student.pickupAddress || 'Not specified'}</div>
-											</div>
-											<div style={{
-												display: 'inline-block',
-												padding: '4px 8px',
-												borderRadius: '12px',
-												backgroundColor: statusOption.color,
-												color: 'white',
-												fontSize: '0.75em',
-												fontWeight: '500'
-											}}>
-												{statusOption.label}
-											</div>
-										</div>
-										
-										<div style={{ marginLeft: '12px' }}>
-											<select 
-												value={currentStatus}
-												onChange={(e) => updateStudentStatus(student.id, e.target.value)}
-												style={{
-													padding: '6px 8px',
-													borderRadius: '6px',
-													border: '1px solid var(--border)',
-													background: 'var(--input-bg)',
-													color: 'var(--text)',
-													fontSize: '0.8em'
-												}}
-											>
-												{statusOptions.map(option => (
-													<option key={option.value} value={option.value}>
-														{option.label}
-													</option>
-												))}
-											</select>
-										</div>
-									</div>
-								</div>
-							);
-						})}
-					</div>
-				)}
+  return (
+    <div className="container">
+      <h2>Driver Panel</h2>
+      <div className="driver-info" style={{ background: "#f5f5f5", padding: "12px", borderRadius: "8px", marginBottom: "16px" }}>
+        <h3 style={{ margin: "0 0 8px 0" }}>Driver Profile</h3>
+        <p style={{ margin: "4px 0" }}>
+          <strong>Name:</strong> {user?.displayName || user?.email || "Driver"}
+        </p>
+        <p style={{ margin: "4px 0", fontSize: "0.9em", color: "#666" }}>
+          Managing daily transport for assigned students
+        </p>
+      </div>
 
-                <p className="muted" style={{ marginTop: 16 }}>
-                    💡 Update student status in real-time to keep parents informed. Location tracking shows bus position on parent dashboards.
-                </p>
-            </div>
+      {/* Debug Information */}
+      {user && (
+        <div style={{ 
+          background: '#f0f0f0', 
+          padding: '12px', 
+          borderRadius: '4px', 
+          marginBottom: '16px',
+          fontSize: '0.9em',
+          fontFamily: 'monospace'
+        }}>
+          <strong>Debug Info:</strong><br/>
+          User ID: {user.uid}<br/>
+          Students Count: {students.length}<br/>
+          Total Requests: {rideRequests.length}<br/>
+          Pending Requests: {pendingRequests.length}
+          <div style={{ marginTop: '8px' }}>
+            <button 
+              onClick={createTestRequest}
+              style={{ 
+                padding: '4px 8px', 
+                fontSize: '0.8em',
+                backgroundColor: '#f59e0b',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                marginRight: '8px'
+              }}
+            >
+              Create Test Request
+            </button>
+          </div>
         </div>
-    );
+      )}
+
+      {/* Tab Navigation */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+        <button 
+          onClick={() => setActiveTab('students')}
+          style={{ 
+            padding: '8px 16px',
+            border: 'none',
+            borderRadius: '4px',
+            backgroundColor: activeTab === 'students' ? '#0d6efd' : '#f5f5f5',
+            color: activeTab === 'students' ? 'white' : '#666',
+            cursor: 'pointer',
+            fontSize: '0.9em',
+            fontWeight: '500'
+          }}
+        >
+          👥 Students ({students.length})
+        </button>
+        <button 
+          onClick={() => setActiveTab('requests')}
+          style={{ 
+            padding: '8px 16px',
+            border: 'none',
+            borderRadius: '4px',
+            backgroundColor: activeTab === 'requests' ? '#0d6efd' : '#f5f5f5',
+            color: activeTab === 'requests' ? 'white' : '#666',
+            cursor: 'pointer',
+            fontSize: '0.9em',
+            fontWeight: '500',
+            position: 'relative'
+          }}
+        >
+          🚌 Ride Requests ({rideRequests.length})
+          {pendingRequests.length > 0 && (
+            <span style={{ 
+              position: 'absolute',
+              top: '-4px',
+              right: '-4px',
+              backgroundColor: '#ef4444',
+              color: 'white',
+              borderRadius: '50%',
+              width: '20px',
+              height: '20px',
+              fontSize: '0.7em',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              {pendingRequests.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Students Tab */}
+      {activeTab === 'students' && (
+        <>
+          <h3 style={{ marginTop: 16 }}>Students ({students.length})</h3>
+          <div style={{ fontSize: "0.9em", color: "#666", marginBottom: "12px" }}>
+            Click any status button to update a student's current status
+          </div>
+          
+          {students.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "20px", color: "#666" }}>
+              No students found in the database
+            </div>
+          ) : (
+            <ul style={{ listStyle: "none", padding: 0 }}>
+              {students.map((s) => {
+                const currentStatus = s.status || "at-home";
+                const availableActions = getStatusOptions(currentStatus);
+                
+                return (
+                  <li key={s.id} style={{ 
+                    display: "flex", 
+                    flexDirection: "column",
+                    gap: 8, 
+                    padding: "12px", 
+                    marginBottom: "12px",
+                    background: "#f9f9f9",
+                    borderRadius: "8px",
+                    border: "1px solid #eee"
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div>
+                        <span style={{ fontSize: "1.1em", fontWeight: "600" }}>{s.fullName}</span>
+                        <div style={{ fontSize: "0.9em", color: "#666", marginTop: "2px" }}>
+                          Age: {s.age || 'N/A'} | School: {s.school || 'N/A'}
+                        </div>
+                      </div>
+                      <div style={{ 
+                        padding: "6px 12px",
+                        borderRadius: "16px",
+                        backgroundColor: getStatusColor(currentStatus),
+                        color: "white",
+                        fontSize: "0.85em",
+                        fontWeight: "500",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px"
+                      }}>
+                        <span>{getStatusIcon(currentStatus)}</span>
+                        <span>{getStatusDisplay(currentStatus)}</span>
+                      </div>
+                    </div>
+                    
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: "0.9em", fontWeight: "500", marginRight: "8px", alignSelf: "center" }}>
+                        Update to:
+                      </span>
+                      {availableActions.map(action => (
+                        <button 
+                          key={action}
+                          onClick={() => updateStudentStatus(s.id, action)}
+                          style={{ 
+                            padding: "6px 12px", 
+                            fontSize: "0.8em",
+                            background: getStatusColor(action),
+                            color: "white",
+                            border: "none",
+                            borderRadius: "16px",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px"
+                          }}
+                        >
+                          <span>{getStatusIcon(action)}</span>
+                          <span>{getStatusDisplay(action)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </>
+      )}
+
+      {/* Ride Requests Tab */}
+      {activeTab === 'requests' && (
+        <>
+          <h3 style={{ marginTop: 16 }}>Ride Requests</h3>
+          
+          {/* Pending Requests */}
+          {pendingRequests.length > 0 && (
+            <div style={{ marginBottom: '24px' }}>
+              <h4 style={{ color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                ⏳ Pending Requests ({pendingRequests.length})
+              </h4>
+              <div style={{ display: 'grid', gap: '12px' }}>
+                {pendingRequests.map((request) => (
+                  <div key={request.id} style={{ 
+                    padding: '16px',
+                    background: '#fef3c7',
+                    borderRadius: '8px',
+                    border: '2px solid #f59e0b'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                          <span style={{ fontSize: '1.1em', fontWeight: '600' }}>
+                            {request.childName}
+                          </span>
+                          {request.requestType === 'emergency' && (
+                            <span style={{ 
+                              padding: '4px 8px',
+                              borderRadius: '12px',
+                              backgroundColor: '#ef4444',
+                              color: 'white',
+                              fontSize: '0.8em',
+                              fontWeight: '500'
+                            }}>
+                              🚨 EMERGENCY
+                            </span>
+                          )}
+                        </div>
+                        
+                        <div style={{ fontSize: '0.9em', marginBottom: '8px' }}>
+                          <div><strong>Parent:</strong> {request.parentEmail}</div>
+                          <div><strong>From:</strong> {request.pickupAddress}</div>
+                          <div><strong>To:</strong> {request.dropoffAddress}</div>
+                          {request.notes && (
+                            <div><strong>Notes:</strong> {request.notes}</div>
+                          )}
+                          <div style={{ fontSize: '0.8em', color: '#666', marginTop: '8px' }}>
+                            🕒 Requested: {request.createdAt?.toDate?.().toLocaleString?.() || 'Unknown'}
+                          </div>
+                        </div>
+                        
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                          <button 
+                            onClick={() => handleRequestResponse(request.id, 'approved', 'Request approved by driver')}
+                            style={{ 
+                              padding: '8px 16px',
+                              backgroundColor: '#10b981',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '0.9em'
+                            }}
+                          >
+                            ✅ Approve
+                          </button>
+                          <button 
+                            onClick={() => handleRequestResponse(request.id, 'rejected', 'Request rejected by driver')}
+                            style={{ 
+                              padding: '8px 16px',
+                              backgroundColor: '#ef4444',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '0.9em'
+                            }}
+                          >
+                            ❌ Reject
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* All Requests History */}
+          {allRequests.length > 0 && (
+            <div>
+              <h4>📋 Request History ({allRequests.length})</h4>
+              <div style={{ display: 'grid', gap: '12px' }}>
+                {allRequests.map((request) => (
+                  <div key={request.id} style={{ 
+                    padding: '16px',
+                    background: '#f9f9f9',
+                    borderRadius: '8px',
+                    border: `2px solid ${getRequestStatusColor(request.status)}20`,
+                    borderLeft: `4px solid ${getRequestStatusColor(request.status)}`
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                          <span style={{ fontSize: '1.1em', fontWeight: '600' }}>
+                            {request.childName}
+                          </span>
+                          <span style={{ 
+                            padding: '4px 8px',
+                            borderRadius: '12px',
+                            backgroundColor: getRequestStatusColor(request.status),
+                            color: 'white',
+                            fontSize: '0.8em',
+                            fontWeight: '500',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}>
+                            <span>{getRequestStatusIcon(request.status)}</span>
+                            <span>{request.status.toUpperCase()}</span>
+                          </span>
+                        </div>
+                        
+                        <div style={{ fontSize: '0.9em' }}>
+                          <div><strong>Parent:</strong> {request.parentEmail}</div>
+                          <div><strong>From:</strong> {request.pickupAddress}</div>
+                          <div><strong>To:</strong> {request.dropoffAddress}</div>
+                          {request.responseMessage && (
+                            <div style={{ 
+                              marginTop: '8px', 
+                              padding: '8px', 
+                              backgroundColor: '#f3f4f6', 
+                              borderRadius: '4px'
+                            }}>
+                              <strong>Response:</strong> {request.responseMessage}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {rideRequests.length === 0 && (
+            <div style={{ textAlign: "center", padding: "20px", color: "#666" }}>
+              No ride requests yet
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
 }

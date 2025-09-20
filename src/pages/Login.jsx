@@ -23,9 +23,22 @@ export default function Login() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, setUser);
+    const unsub = onAuthStateChanged(auth, (newUser) => {
+      // Clear role state when user changes
+      if (user && newUser && user.uid !== newUser.uid) {
+        // Different user logged in, clear stored role
+        localStorage.removeItem('user.role');
+        setSelectedRole('');
+      } else if (!newUser) {
+        // User logged out, clear stored role
+        localStorage.removeItem('user.role');
+        setSelectedRole('');
+      }
+      
+      setUser(newUser);
+    });
     return () => unsub();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     // Load saved role when user changes, or use URL param
@@ -33,6 +46,7 @@ export default function Login() {
       const urlRole = searchParams.get('role');
       const savedRole = localStorage.getItem('user.role') || '';
       const roleToUse = urlRole || savedRole;
+      console.log('Setting role for logged in user:', { urlRole, savedRole, roleToUse });
       setSelectedRole(roleToUse);
       
       // Auto-save role from URL if present
@@ -41,7 +55,13 @@ export default function Login() {
       }
     } else {
       const urlRole = searchParams.get('role');
+      console.log('Setting role for logged out user:', { urlRole });
       setSelectedRole(urlRole || '');
+      
+      // Set role from URL parameter even when not logged in
+      if (urlRole) {
+        localStorage.setItem('user.role', urlRole);
+      }
     }
   }, [user, searchParams]);
 
@@ -70,7 +90,12 @@ export default function Login() {
 
   const handleEmailAuth = async (e) => {
     e.preventDefault();
-    if (!email || !password || !selectedRole) {
+    
+    // Check for role from URL parameter or selected role
+    const urlRole = searchParams.get('role');
+    const currentRole = urlRole || selectedRole;
+    
+    if (!email || !password || !currentRole) {
       alert('Please fill in all fields and select a role');
       return;
     }
@@ -100,7 +125,7 @@ export default function Login() {
         console.log('Login successful');
       }
 
-      await saveUserToFirestore(user, selectedRole);
+      await saveUserToFirestore(user, currentRole);
     } catch (e) {
       console.error('Email auth error:', e);
       let message = e.message;
@@ -158,9 +183,25 @@ export default function Login() {
   };
 
   const handleLogout = async () => {
-    localStorage.removeItem('user.role');
-    localStorage.removeItem('driver.busId');
-    await signOut(auth);
+    try {
+      // Clear all stored role and user data
+      localStorage.removeItem('user.role');
+      localStorage.removeItem('driver.busId');
+      
+      // Sign out from Firebase
+      await signOut(auth);
+      
+      // Reset component state
+      setSelectedRole('');
+      setEmail('');
+      setPassword('');
+      setName('');
+      
+      // Navigate to login page
+      navigate('/login');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
   };
 
   const saveRole = () => {
@@ -216,6 +257,18 @@ export default function Login() {
               <p className="muted" style={{ marginBottom: 20 }}>
                 Sign in as {selectedRole || searchParams.get('role')}
               </p>
+
+              {/* Debug Info */}
+              <div style={{ 
+                background: '#f0f0f0', 
+                padding: '8px', 
+                borderRadius: '4px', 
+                marginBottom: '16px',
+                fontSize: '0.8em',
+                fontFamily: 'monospace'
+              }}>
+                Debug: selectedRole="{selectedRole}", urlRole="{searchParams.get('role')}"
+              </div>
 
               {/* Auth Mode Toggle */}
               <div style={{ marginBottom: 20 }}>
