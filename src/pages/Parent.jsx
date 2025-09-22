@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth, db, functions } from "../firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, doc, onSnapshot, query, where, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, doc, onSnapshot, query, where, addDoc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet-defaulticon-compatibility";
@@ -28,6 +28,7 @@ export default function Parent() {
   const [payingFor, setPayingFor] = useState(null);
   const [rideRequests, setRideRequests] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
+  const [payments, setPayments] = useState([]);
   const [showRequestForm, setShowRequestForm] = useState(false);
   const [requestData, setRequestData] = useState({
     childId: '',
@@ -107,10 +108,21 @@ export default function Parent() {
       console.error("Error listening to subscriptions:", error);
     });
 
+    // Query payments for this parent
+    const paymentsQuery = query(collection(db, "payments"), where("parentId", "==", user.uid));
+    const unsubPayments = onSnapshot(paymentsQuery, (snap) => {
+      const paymentsList = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      console.log("Parent: Loaded payments:", paymentsList);
+      setPayments(paymentsList);
+    }, (error) => {
+      console.error("Error listening to payments:", error);
+    });
+
     return () => {
       unsubStudents();
       unsubRequests();
       unsubSubscriptions();
+      unsubPayments();
     };
   }, [user]);
 
@@ -203,29 +215,74 @@ export default function Parent() {
     }
   };
 
-  const paySubscription = async (subscription) => {
+  const paySubscription = async (subscriptionId) => {
     try {
-      setPayingFor(subscription.id);
-      const month = new Date().toLocaleString(undefined, { month: "long", year: "numeric" });
-      const res = await createCheckout({
-        subscriptionId: subscription.id,
-        studentName: subscription.studentName,
-        month,
-        amount: subscription.monthlyFee || 2500,
-        currency: "lkr",
-        successUrl: window.location.origin + "/parent?paid=1",
-        cancelUrl: window.location.origin + "/parent?canceled=1",
-      });
-      const url = res?.data?.url;
-      if (url) {
-        window.location.assign(url);
+      setPayingFor(subscriptionId);
+      
+      // Find the subscription details
+      const subscription = subscriptions.find(s => s.id === subscriptionId);
+      if (!subscription) {
+        throw new Error("Subscription not found");
       }
-    } catch (e) {
-      console.error(e);
-      alert(e.message || "Payment init failed");
+
+      console.log("🏦 Initiating Google Pay payment for subscription:", subscription.studentName);
+      
+      // For now, simulate Google Pay payment
+      // In production, you would integrate with actual Google Pay API
+      const paymentSuccess = await simulateGooglePayPayment(subscription);
+      
+      if (paymentSuccess) {
+        // Update subscription with payment details
+        await updateDoc(doc(db, "subscriptions", subscriptionId), {
+          lastPaymentDate: serverTimestamp(),
+          nextPaymentDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // Next month
+          paymentStatus: "paid",
+          totalPaid: (subscription.totalPaid || 0) + subscription.monthlyFee,
+          paymentsCount: (subscription.paymentsCount || 0) + 1,
+          updatedAt: serverTimestamp()
+        });
+
+        // Create payment record
+        await addDoc(collection(db, "payments"), {
+          subscriptionId: subscriptionId,
+          parentId: user.uid,
+          driverId: subscription.driverId,
+          studentName: subscription.studentName,
+          amount: subscription.monthlyFee,
+          currency: "LKR",
+          paymentMethod: "google_pay",
+          status: "completed",
+          transactionId: `GP_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          paymentDate: serverTimestamp(),
+          description: `Monthly transport fee for ${subscription.studentName}`,
+          createdAt: serverTimestamp()
+        });
+
+        alert(`✅ Payment successful! Paid ${subscription.monthlyFee} LKR via Google Pay`);
+      }
+    } catch (error) {
+      console.error("Payment failed:", error);
+      alert(`❌ Payment failed: ${error.message}`);
     } finally {
       setPayingFor(null);
     }
+  };
+
+  const simulateGooglePayPayment = async (subscription) => {
+    // Simulate Google Pay payment process
+    return new Promise((resolve) => {
+      console.log("🔄 Processing Google Pay payment...");
+      console.log("💰 Amount:", subscription.monthlyFee, "LKR");
+      console.log("👨‍🏫 Driver:", subscription.driverName);
+      console.log("👶 Student:", subscription.studentName);
+      
+      // Simulate payment delay
+      setTimeout(() => {
+        const success = Math.random() > 0.1; // 90% success rate for demo
+        console.log(success ? "✅ Google Pay payment successful" : "❌ Google Pay payment failed");
+        resolve(success);
+      }, 2000);
+    });
   };
 
   const handleRequestSubmit = async (e) => {
@@ -363,6 +420,67 @@ export default function Parent() {
           </button>
         </div>
       </div>
+
+      {/* Payment Reminders */}
+      {subscriptions.filter(sub => {
+        const dueDate = sub.nextPaymentDate?.toDate?.() || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+        const today = new Date();
+        const daysDiff = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+        return sub.status === 'active' && (sub.paymentStatus === 'pending' || daysDiff <= 7);
+      }).map(subscription => {
+        const dueDate = subscription.nextPaymentDate?.toDate?.() || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+        const today = new Date();
+        const daysDiff = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+        const isOverdue = daysDiff < 0;
+        const isDueSoon = daysDiff <= 7 && daysDiff >= 0;
+        
+        if (isOverdue || isDueSoon) {
+          return (
+            <div key={subscription.id} style={{
+              padding: '12px',
+              marginBottom: '16px',
+              borderRadius: '8px',
+              border: `2px solid ${isOverdue ? '#ef4444' : '#f59e0b'}`,
+              backgroundColor: isOverdue ? '#fef2f2' : '#fef3c7',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '1.5em' }}>
+                  {isOverdue ? '🚨' : '⏰'}
+                </span>
+                <div>
+                  <div style={{ fontWeight: '600', color: isOverdue ? '#dc2626' : '#d97706' }}>
+                    {isOverdue ? 'Payment Overdue' : 'Payment Due Soon'}
+                  </div>
+                  <div style={{ fontSize: '0.9em', color: '#6b7280' }}>
+                    {subscription.studentName} - {subscription.monthlyFee || 2500} LKR 
+                    {isOverdue ? ` (${Math.abs(daysDiff)} days overdue)` : ` (due in ${daysDiff} days)`}
+                  </div>
+                </div>
+              </div>
+              <button 
+                onClick={() => paySubscription(subscription.id)}
+                disabled={!!payingFor}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #4285f4 0%, #34a853 50%, #fbbc05 75%, #ea4335 100%)',
+                  color: 'white',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  fontSize: '0.9em'
+                }}
+              >
+                💳 Pay Now
+              </button>
+            </div>
+          );
+        }
+        return null;
+      })}
 
       {/* Debug Information */}
       {user && (
@@ -708,19 +826,37 @@ export default function Parent() {
                         <div><strong>Route:</strong> {subscription.pickupAddress} → {subscription.dropoffAddress}</div>
                         <div><strong>Monthly Fee:</strong> {subscription.monthlyFee || 2500} LKR</div>
                         <div><strong>Started:</strong> {subscription.createdAt?.toDate?.().toLocaleDateString?.() || 'Unknown'}</div>
-                        <div><strong>Next Payment:</strong> {nextPaymentDate.toLocaleDateString()}</div>
+                        <div><strong>Next Payment Due:</strong> {subscription.nextPaymentDate?.toDate?.().toLocaleDateString?.() || nextPaymentDate.toLocaleDateString()}</div>
+                        <div><strong>Payment Method:</strong> 💳 Google Pay</div>
+                        {subscription.totalPaid > 0 && (
+                          <div><strong>Total Paid:</strong> {subscription.totalPaid} LKR ({subscription.paymentsCount || 0} payments)</div>
+                        )}
                       </div>
                       
-                      {subscription.lastPayment && (
+                      {subscription.lastPaymentDate && (
                         <div style={{ 
                           padding: '8px',
-                          backgroundColor: '#f3f4f6',
+                          backgroundColor: '#f0fdf4',
                           borderRadius: '4px',
                           fontSize: '0.85em',
-                          color: '#374151'
+                          color: '#059669',
+                          border: '1px solid #d1fae5'
                         }}>
-                          <strong>Last Payment:</strong> {subscription.lastPayment.toDate?.().toLocaleDateString?.()} 
-                          - {subscription.monthlyFee || 2500} LKR
+                          <strong>✅ Last Payment:</strong> {subscription.lastPaymentDate.toDate?.().toLocaleDateString?.()} 
+                          - {subscription.monthlyFee || 2500} LKR via Google Pay
+                        </div>
+                      )}
+                      
+                      {subscription.paymentStatus === 'pending' && (
+                        <div style={{ 
+                          padding: '8px',
+                          backgroundColor: '#fef3c7',
+                          borderRadius: '4px',
+                          fontSize: '0.85em',
+                          color: '#d97706',
+                          border: '1px solid #fde68a'
+                        }}>
+                          <strong>⏳ Payment Due:</strong> Monthly payment is pending
                         </div>
                       )}
                     </div>
@@ -733,13 +869,28 @@ export default function Parent() {
                             onClick={() => paySubscription(subscription.id)}
                             disabled={!!payingFor}
                             style={{ 
-                              backgroundColor: '#10b981', 
+                              background: 'linear-gradient(135deg, #4285f4 0%, #34a853 50%, #fbbc05 75%, #ea4335 100%)',
                               color: 'white',
                               fontSize: '0.85em',
-                              padding: '8px 12px'
+                              padding: '12px 16px',
+                              border: 'none',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              fontWeight: '500',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                             }}
                           >
-                            {payingFor === subscription.id ? "Processing..." : `Pay ${subscription.monthlyFee || 2500} LKR`}
+                            {payingFor === subscription.id ? (
+                              "🔄 Processing..."
+                            ) : (
+                              <>
+                                <span style={{ fontSize: '1.2em' }}>💳</span>
+                                Pay {subscription.monthlyFee || 2500} LKR via Google Pay
+                              </>
+                            )}
                           </button>
                           <button 
                             className="btn"
@@ -770,6 +921,58 @@ export default function Parent() {
                 </div>
               );
             })}
+          </div>
+        )}
+      </div>
+
+      {/* Payment History */}
+      <div style={{ marginBottom: 24 }}>
+        <h3>Payment History ({payments.length})</h3>
+        {payments.length === 0 ? (
+          <div className="muted" style={{ textAlign: 'center', padding: 20 }}>
+            <p>💳 No payment history yet</p>
+            <p style={{ fontSize: '0.9em' }}>Payments will appear here after you make monthly subscription payments.</p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gap: '12px' }}>
+            {payments.slice().reverse().map(payment => (
+              <div key={payment.id} className="card" style={{ 
+                border: '1px solid #e5e7eb',
+                padding: '12px',
+                backgroundColor: payment.status === 'completed' ? '#f0fdf4' : '#fef2f2'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '1.1em', fontWeight: '600' }}>
+                        💳 {payment.amount} LKR
+                      </span>
+                      <span style={{ 
+                        padding: '2px 6px',
+                        borderRadius: '8px',
+                        backgroundColor: payment.status === 'completed' ? '#10b981' : '#ef4444',
+                        color: 'white',
+                        fontSize: '0.7em',
+                        fontWeight: '500'
+                      }}>
+                        {payment.status.toUpperCase()}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.85em', color: '#6b7280' }}>
+                      <div><strong>Student:</strong> {payment.studentName}</div>
+                      <div><strong>Method:</strong> Google Pay</div>
+                      <div><strong>Transaction ID:</strong> {payment.transactionId}</div>
+                      <div><strong>Date:</strong> {payment.paymentDate?.toDate?.().toLocaleDateString?.()} at {payment.paymentDate?.toDate?.().toLocaleTimeString?.()}</div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '0.8em', color: '#059669', fontWeight: '500' }}>
+                      ✅ PAID
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>

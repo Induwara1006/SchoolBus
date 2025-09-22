@@ -163,7 +163,7 @@ export default function Driver() {
       // Add to students collection for ongoing transport
       await addDoc(collection(db, "students"), studentData);
       
-      // Create subscription record
+      // Create subscription record with payment tracking
       const subscriptionData = {
         studentId: request.childId,
         studentName: request.childName,
@@ -171,13 +171,21 @@ export default function Driver() {
         parentEmail: request.parentEmail,
         driverId: user.uid,
         driverEmail: user.email,
+        driverName: user.displayName || user.email,
         monthlyFee: 2500,
         status: "active",
         startDate: serverTimestamp(),
         pickupAddress: request.pickupAddress,
         dropoffAddress: request.dropoffAddress,
         paymentDueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
-        createdAt: serverTimestamp()
+        nextPaymentDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        paymentMethod: "google_pay",
+        paymentStatus: "pending",
+        totalPaid: 0,
+        paymentsCount: 0,
+        lastPaymentDate: null,
+        createdAt: serverTimestamp(),
+        notes: request.notes || ""
       };
 
       await addDoc(collection(db, "subscriptions"), subscriptionData);
