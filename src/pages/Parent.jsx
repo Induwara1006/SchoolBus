@@ -27,6 +27,7 @@ export default function Parent() {
   const [busLocations, setBusLocations] = useState({});
   const [payingFor, setPayingFor] = useState(null);
   const [rideRequests, setRideRequests] = useState([]);
+  const [subscriptions, setSubscriptions] = useState([]);
   const [showRequestForm, setShowRequestForm] = useState(false);
   const [requestData, setRequestData] = useState({
     childId: '',
@@ -96,9 +97,20 @@ export default function Parent() {
       console.error("Error listening to ride requests:", error);
     });
 
+    // Query subscriptions for this parent
+    const subscriptionsQuery = query(collection(db, "subscriptions"), where("parentId", "==", user.uid));
+    const unsubSubscriptions = onSnapshot(subscriptionsQuery, (snap) => {
+      const subs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      console.log("Parent: Loaded subscriptions:", subs);
+      setSubscriptions(subs);
+    }, (error) => {
+      console.error("Error listening to subscriptions:", error);
+    });
+
     return () => {
       unsubStudents();
       unsubRequests();
+      unsubSubscriptions();
     };
   }, [user]);
 
@@ -174,6 +186,48 @@ export default function Parent() {
     }
   };
 
+  const cancelSubscription = async (subscriptionId) => {
+    const confirmed = window.confirm("Are you sure you want to cancel this subscription? This will stop the daily transport service.");
+    if (!confirmed) return;
+
+    try {
+      await updateDoc(doc(db, "subscriptions", subscriptionId), {
+        status: "cancelled",
+        cancelledAt: serverTimestamp(),
+        cancelledBy: user.uid
+      });
+      alert("Subscription cancelled successfully");
+    } catch (error) {
+      console.error("Error cancelling subscription:", error);
+      alert("Failed to cancel subscription. Please try again.");
+    }
+  };
+
+  const paySubscription = async (subscription) => {
+    try {
+      setPayingFor(subscription.id);
+      const month = new Date().toLocaleString(undefined, { month: "long", year: "numeric" });
+      const res = await createCheckout({
+        subscriptionId: subscription.id,
+        studentName: subscription.studentName,
+        month,
+        amount: subscription.monthlyFee || 2500,
+        currency: "lkr",
+        successUrl: window.location.origin + "/parent?paid=1",
+        cancelUrl: window.location.origin + "/parent?canceled=1",
+      });
+      const url = res?.data?.url;
+      if (url) {
+        window.location.assign(url);
+      }
+    } catch (e) {
+      console.error(e);
+      alert(e.message || "Payment init failed");
+    } finally {
+      setPayingFor(null);
+    }
+  };
+
   const handleRequestSubmit = async (e) => {
     e.preventDefault();
     if (!requestData.childId || !requestData.pickupAddress || !requestData.dropoffAddress) {
@@ -199,7 +253,8 @@ export default function Parent() {
         createdAt: serverTimestamp(),
       });
       
-      console.log("Ride request created with ID:", docRef.id);
+      console.log("✅ PARENT: Ride request created successfully with ID:", docRef.id);
+      console.log("✅ PARENT: Request should appear in driver dashboard immediately");
       
       // Reset form
       setRequestData({
@@ -598,6 +653,116 @@ export default function Parent() {
                           gap: '4px'
                         }}>
                           🟢 Live tracking active
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Active Subscriptions */}
+      <div style={{ marginBottom: 24 }}>
+        <h3>Active Subscriptions ({subscriptions.length})</h3>
+        {subscriptions.length === 0 ? (
+          <div className="muted" style={{ textAlign: 'center', padding: 20 }}>
+            <p>📋 No active subscriptions</p>
+            <p style={{ fontSize: '0.9em' }}>Once a driver approves your ride request, an ongoing monthly subscription will be created.</p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gap: '16px' }}>
+            {subscriptions.map(subscription => {
+              const child = children.find(c => c.id === subscription.childId);
+              const nextPaymentDate = new Date();
+              nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
+              
+              return (
+                <div key={subscription.id} className="card" style={{ 
+                  border: '1px solid #e5e7eb',
+                  padding: '16px',
+                  backgroundColor: subscription.status === 'active' ? '#f0fdf4' : '#fef2f2'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                        <h4 style={{ margin: 0, color: '#1f2937' }}>
+                          🚌 {child?.fullName || 'Child'} - Transport Service
+                        </h4>
+                        <span style={{ 
+                          padding: '4px 8px',
+                          borderRadius: '12px',
+                          backgroundColor: subscription.status === 'active' ? '#10b981' : '#ef4444',
+                          color: 'white',
+                          fontSize: '0.75em',
+                          fontWeight: '500'
+                        }}>
+                          {subscription.status.toUpperCase()}
+                        </span>
+                      </div>
+                      
+                      <div style={{ marginBottom: '12px', color: '#6b7280', fontSize: '0.9em' }}>
+                        <div><strong>Driver:</strong> {subscription.driverName || 'Unknown'}</div>
+                        <div><strong>Route:</strong> {subscription.pickupAddress} → {subscription.dropoffAddress}</div>
+                        <div><strong>Monthly Fee:</strong> {subscription.monthlyFee || 2500} LKR</div>
+                        <div><strong>Started:</strong> {subscription.createdAt?.toDate?.().toLocaleDateString?.() || 'Unknown'}</div>
+                        <div><strong>Next Payment:</strong> {nextPaymentDate.toLocaleDateString()}</div>
+                      </div>
+                      
+                      {subscription.lastPayment && (
+                        <div style={{ 
+                          padding: '8px',
+                          backgroundColor: '#f3f4f6',
+                          borderRadius: '4px',
+                          fontSize: '0.85em',
+                          color: '#374151'
+                        }}>
+                          <strong>Last Payment:</strong> {subscription.lastPayment.toDate?.().toLocaleDateString?.()} 
+                          - {subscription.monthlyFee || 2500} LKR
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginLeft: '16px' }}>
+                      {subscription.status === 'active' && (
+                        <>
+                          <button 
+                            className="btn"
+                            onClick={() => paySubscription(subscription.id)}
+                            disabled={!!payingFor}
+                            style={{ 
+                              backgroundColor: '#10b981', 
+                              color: 'white',
+                              fontSize: '0.85em',
+                              padding: '8px 12px'
+                            }}
+                          >
+                            {payingFor === subscription.id ? "Processing..." : `Pay ${subscription.monthlyFee || 2500} LKR`}
+                          </button>
+                          <button 
+                            className="btn"
+                            onClick={() => cancelSubscription(subscription.id)}
+                            style={{ 
+                              backgroundColor: '#ef4444', 
+                              color: 'white',
+                              fontSize: '0.85em',
+                              padding: '8px 12px'
+                            }}
+                          >
+                            Cancel Subscription
+                          </button>
+                        </>
+                      )}
+                      
+                      {subscription.status === 'cancelled' && (
+                        <span style={{ 
+                          fontSize: '0.85em',
+                          color: '#6b7280',
+                          fontStyle: 'italic'
+                        }}>
+                          Cancelled on {subscription.cancelledAt?.toDate?.().toLocaleDateString?.()}
                         </span>
                       )}
                     </div>

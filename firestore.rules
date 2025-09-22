@@ -13,30 +13,9 @@ service cloud.firestore {
       allow write: if isSignedIn() && request.auth.uid == uid; // Only write own profile
     }
 
-    // Students collection - parents can read their children, drivers can read/update students on their bus
+    // Students collection - simplified for testing
     match /students/{studentId} {
-      allow read: if isSignedIn() && (
-        // Parent of this student
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.parentOf hasAny [studentId])
-        ||
-        // Driver of this student's bus
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.driverOfBusId == resource.data.busId)
-        ||
-        // Allow all reads for testing (remove in production)
-        true
-      );
-      
-      // Allow driver to update student status, lastStatusUpdate, and updatedBy on their bus
-      allow update: if isSignedIn() && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.driverOfBusId == resource.data.busId
-        && request.resource.data.diff(resource.data).changedKeys().hasOnly(["status", "lastStatusUpdate", "updatedBy"])
-        ||
-        // Allow all writes for testing (remove in production)
-        true
-      );
-      
-      allow create, delete: if isSignedIn(); // For testing
+      allow read, write: if isSignedIn(); // Simplified for testing
     }
 
     // Transport requests - parents can create, drivers can read/update their own
@@ -47,6 +26,17 @@ service cloud.firestore {
       );
       allow create: if isSignedIn() && request.auth.uid == request.resource.data.parentId;
       allow update: if isSignedIn() && request.auth.uid == resource.data.driverId;
+    }
+
+    // Ride requests - parents can create, drivers can read/update
+    match /rideRequests/{requestId} {
+      allow read: if isSignedIn(); // Allow all authenticated users to read
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.parentId;
+      allow update: if isSignedIn(); // Allow drivers to update status and responses
+      allow delete: if isSignedIn() && (
+        request.auth.uid == resource.data.parentId ||
+        request.auth.uid == resource.data.driverId
+      );
     }
 
     // Live locations for buses

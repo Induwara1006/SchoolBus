@@ -99,16 +99,42 @@ export default function FindDrivers() {
   };
 
   const handleSubmitRequest = async () => {
-    if (!selectedDriver || !user) return;
+    console.log("🚌 FIND DRIVERS: Starting request submission...");
+    console.log("🚌 FIND DRIVERS: User state:", {
+      userExists: !!user,
+      userUID: user?.uid,
+      userEmail: user?.email
+    });
+    console.log("🚌 FIND DRIVERS: Selected driver:", selectedDriver);
+    console.log("🚌 FIND DRIVERS: Request data:", requestData);
+    
+    if (!selectedDriver || !user) {
+      console.error("❌ FIND DRIVERS: Missing selectedDriver or user");
+      return;
+    }
     
     // Validate required fields
     if (!requestData.childName || !requestData.pickupAddress || !requestData.dropoffAddress) {
+      console.error("❌ FIND DRIVERS: Missing required fields:", {
+        childName: requestData.childName,
+        pickupAddress: requestData.pickupAddress,
+        dropoffAddress: requestData.dropoffAddress
+      });
       alert('Please fill in all required fields.');
       return;
     }
 
     try {
-      await addDoc(collection(db, 'transportRequests'), {
+      console.log("🚌 FIND DRIVERS: Sending request to driver:", selectedDriver.displayName);
+      console.log("🚌 FIND DRIVERS: Request data:", {
+        driverId: selectedDriver.id,
+        driverName: selectedDriver.displayName,
+        childName: requestData.childName,
+        pickupAddress: requestData.pickupAddress,
+        dropoffAddress: requestData.dropoffAddress
+      });
+      
+      const docRef = await addDoc(collection(db, 'rideRequests'), {
         driverId: selectedDriver.id,
         driverName: selectedDriver.displayName,
         parentId: user.uid,
@@ -122,8 +148,13 @@ export default function FindDrivers() {
         additionalNotes: requestData.additionalNotes,
         status: 'pending',
         createdAt: serverTimestamp(),
-        requestMessage: `I would like to request transport service for my child ${requestData.childName}. Please review the details and let me know if you can provide this service.`
+        requestMessage: `I would like to request transport service for my child ${requestData.childName}. Please review the details and let me know if you can provide this service.`,
+        requestType: 'targeted', // Mark as targeted request to specific driver
+        notes: requestData.additionalNotes
       });
+
+      console.log("✅ FIND DRIVERS: Request sent successfully with ID:", docRef.id);
+      console.log("✅ FIND DRIVERS: Driver should see this request immediately");
 
       alert('Request sent successfully! The driver will review your request and respond.');
       setShowRequestModal(false);
@@ -136,8 +167,21 @@ export default function FindDrivers() {
         additionalNotes: ''
       });
     } catch (error) {
-      console.error('Error sending request:', error);
-      alert('Failed to send request. Please try again.');
+      console.error('❌ FIND DRIVERS: Error sending request:', error);
+      console.error('❌ FIND DRIVERS: Error details:', {
+        code: error.code,
+        message: error.message,
+        stack: error.stack
+      });
+      console.error('❌ FIND DRIVERS: User state:', {
+        userExists: !!user,
+        userUID: user?.uid,
+        userEmail: user?.email
+      });
+      console.error('❌ FIND DRIVERS: Selected driver:', selectedDriver);
+      console.error('❌ FIND DRIVERS: Request data:', requestData);
+      
+      alert(`Failed to send request: ${error.message}. Please try again.`);
     }
   };
 

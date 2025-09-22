@@ -7,7 +7,8 @@ export default function Driver() {
   const [user, setUser] = useState(null);
   const [students, setStudents] = useState([]);
   const [rideRequests, setRideRequests] = useState([]);
-  const [activeTab, setActiveTab] = useState('students'); // 'students' or 'requests'
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [activeTab, setActiveTab] = useState('students'); // 'students', 'requests', or 'subscriptions'
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => setUser(u));
@@ -27,15 +28,38 @@ export default function Driver() {
     const requestsQuery = query(collection(db, "rideRequests"));
     const unsubRequests = onSnapshot(requestsQuery, (snap) => {
       const requests = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      console.log("Driver: Loaded ride requests:", requests);
+      console.log("Driver: Raw ride requests from Firestore:", requests);
+      console.log("Driver: Number of requests:", requests.length);
+      requests.forEach((req, index) => {
+        console.log(`Driver: Request ${index + 1}:`, {
+          id: req.id,
+          status: req.status,
+          childName: req.childName,
+          parentEmail: req.parentEmail,
+          createdAt: req.createdAt
+        });
+      });
       setRideRequests(requests);
     }, (error) => {
       console.error("Driver: Error listening to ride requests:", error);
     });
 
+    // Listen for subscriptions where this driver is assigned
+    const subscriptionsQuery = query(collection(db, "subscriptions"));
+    const unsubSubscriptions = onSnapshot(subscriptionsQuery, (snap) => {
+      const allSubscriptions = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      // Filter subscriptions for this driver
+      const driverSubscriptions = allSubscriptions.filter(sub => sub.driverId === user.uid);
+      console.log("Driver: Loaded subscriptions:", driverSubscriptions);
+      setSubscriptions(driverSubscriptions);
+    }, (error) => {
+      console.error("Driver: Error listening to subscriptions:", error);
+    });
+
     return () => {
       unsub();
       unsubRequests();
+      unsubSubscriptions();
     };
   }, [user]);
 
@@ -95,6 +119,16 @@ export default function Driver() {
   const handleRequestResponse = async (requestId, status, responseMessage = '') => {
     try {
       console.log("Driver responding to request:", requestId, "with status:", status);
+      
+      if (status === 'approved') {
+        // Find the request details
+        const request = rideRequests.find(r => r.id === requestId);
+        if (request) {
+          // Create ongoing subscription when approving
+          await createOngoingSubscription(request);
+        }
+      }
+      
       await updateDoc(doc(db, "rideRequests", requestId), {
         status,
         responseMessage,
@@ -105,6 +139,52 @@ export default function Driver() {
     } catch (error) {
       console.error("Error updating request:", error);
       alert("Failed to update request. Please try again.");
+    }
+  };
+
+  const createOngoingSubscription = async (request) => {
+    try {
+      // Create a student record if it doesn't exist
+      const studentData = {
+        fullName: request.childName,
+        parentId: request.parentId,
+        driverId: user.uid,
+        driverEmail: user.email,
+        pickupAddress: request.pickupAddress,
+        dropoffAddress: request.dropoffAddress,
+        status: "at-home",
+        monthlyFee: 2500, // Default monthly fee
+        subscriptionActive: true,
+        subscriptionStartDate: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        notes: request.notes || ""
+      };
+
+      // Add to students collection for ongoing transport
+      await addDoc(collection(db, "students"), studentData);
+      
+      // Create subscription record
+      const subscriptionData = {
+        studentId: request.childId,
+        studentName: request.childName,
+        parentId: request.parentId,
+        parentEmail: request.parentEmail,
+        driverId: user.uid,
+        driverEmail: user.email,
+        monthlyFee: 2500,
+        status: "active",
+        startDate: serverTimestamp(),
+        pickupAddress: request.pickupAddress,
+        dropoffAddress: request.dropoffAddress,
+        paymentDueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+        createdAt: serverTimestamp()
+      };
+
+      await addDoc(collection(db, "subscriptions"), subscriptionData);
+      
+      console.log("Ongoing subscription created successfully");
+    } catch (error) {
+      console.error("Error creating subscription:", error);
     }
   };
 
@@ -128,7 +208,24 @@ export default function Driver() {
     return icons[status] || '📋';
   };
 
-  const pendingRequests = rideRequests.filter(r => r.status === 'pending');
+  // Filter requests - show both general requests and requests targeted to this driver
+  const pendingRequests = rideRequests.filter(r => 
+    r.status === 'pending' && 
+    (!r.driverId || r.driverId === user?.uid)  // Show general requests OR requests targeted to this driver
+  );
+  
+  // Debug logging for request filtering
+  console.log("Driver: Total ride requests:", rideRequests.length);
+  console.log("Driver: My driver ID:", user?.uid);
+  console.log("Driver: Pending requests for me:", pendingRequests.length);
+  console.log("Driver: All request details:", rideRequests.map(r => ({ 
+    id: r.id, 
+    status: r.status, 
+    driverId: r.driverId,
+    isForMe: r.driverId === user?.uid || !r.driverId,
+    childName: r.childName 
+  })));
+  
   const approvedRequests = rideRequests.filter(r => r.status === 'approved');
   const allRequests = rideRequests.filter(r => r.status !== 'pending');
 
@@ -259,6 +356,21 @@ export default function Driver() {
             </span>
           )}
         </button>
+        <button 
+          onClick={() => setActiveTab('subscriptions')}
+          style={{ 
+            padding: '8px 16px',
+            border: 'none',
+            borderRadius: '4px',
+            backgroundColor: activeTab === 'subscriptions' ? '#0d6efd' : '#f5f5f5',
+            color: activeTab === 'subscriptions' ? 'white' : '#666',
+            cursor: 'pointer',
+            fontSize: '0.9em',
+            fontWeight: '500'
+          }}
+        >
+          📋 Subscriptions ({subscriptions.length})
+        </button>
       </div>
 
       {/* Students Tab */}
@@ -382,6 +494,18 @@ export default function Driver() {
                               fontWeight: '500'
                             }}>
                               🚨 EMERGENCY
+                            </span>
+                          )}
+                          {request.driverId === user?.uid && (
+                            <span style={{ 
+                              padding: '4px 8px',
+                              borderRadius: '12px',
+                              backgroundColor: '#10b981',
+                              color: 'white',
+                              fontSize: '0.8em',
+                              fontWeight: '500'
+                            }}>
+                              🎯 TARGETED TO YOU
                             </span>
                           )}
                         </div>
