@@ -9,6 +9,10 @@ import "leaflet-defaulticon-compatibility";
 import "leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css";
 import { httpsCallable } from "firebase/functions";
 import GooglePayButton from "@google-pay/button-react";
+import EmergencyButton from "../components/EmergencyButton";
+import { calculateBusETA } from "../utils/eta";
+import TripHistory from "../components/TripHistory";
+import AttendanceTracker from "../components/AttendanceTracker";
 
 // Status mapping for better display
 const statusConfig = {
@@ -1030,6 +1034,19 @@ export default function Parent() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginLeft: '16px' }}>
                       {subscription.status === 'active' && (
                         <>
+                          <EmergencyButton 
+                            driverInfo={{
+                              id: subscription.driverId,
+                              email: subscription.driverEmail,
+                              displayName: subscription.driverName,
+                              phone: subscription.driverPhone
+                            }}
+                            childInfo={{
+                              id: subscription.childId,
+                              name: child?.fullName
+                            }}
+                          />
+                          
                           {payingFor === subscription.id ? (
                             <div style={{
                               background: '#6b7280',
@@ -1211,6 +1228,23 @@ export default function Parent() {
       {Object.keys(busLocations).length === 0 && children.length > 0 && (
         <div className="muted" style={{ textAlign: 'center', padding: 20 }}>
           <p>📍 Bus location will appear here when your children are picked up</p>
+        </div>
+      )}
+
+      {/* Trip History and Attendance Tracker */}
+      <TripHistory userRole="parent" />
+      
+      {/* Attendance Tracker for Each Child */}
+      {children.length > 0 && (
+        <div style={{ marginTop: 24 }}>
+          {children.map(child => (
+            <AttendanceTracker 
+              key={child.id}
+              userRole="parent" 
+              studentId={child.id}
+              studentName={child.fullName}
+            />
+          ))}
         </div>
       )}
     </div>

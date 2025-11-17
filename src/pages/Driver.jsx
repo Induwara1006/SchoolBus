@@ -1,7 +1,8 @@
 ﻿import { useEffect, useState } from "react";
 import { auth, db } from "../firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, onSnapshot, query, updateDoc, doc, serverTimestamp, addDoc } from "firebase/firestore";
+import { collection, onSnapshot, query, updateDoc, doc, serverTimestamp, addDoc, getDocs, where } from "firebase/firestore";
+import { notifyStatusChange } from "../utils/notifications";
 
 export default function Driver() {
   const [user, setUser] = useState(null);
@@ -65,13 +66,148 @@ export default function Driver() {
 
   const updateStudentStatus = async (studentId, newStatus) => {
     try {
+      console.log('🔵 updateStudentStatus called with:', studentId, newStatus);
+      const student = students.find(s => s.id === studentId);
+      console.log('🔵 Found student:', student);
+      const oldStatus = student?.status;
+
       await updateDoc(doc(db, "students", studentId), {
         status: newStatus,
         lastStatusUpdate: serverTimestamp(),
         updatedBy: user.uid
       });
+
+      // Send notification to parent
+      if (student?.parentId && oldStatus !== newStatus) {
+        await notifyStatusChange(student.parentId, student.name, oldStatus, newStatus);
+      }
+
+      // Create or update trip and attendance records
+      await createOrUpdateTripAndAttendance(student, oldStatus, newStatus);
     } catch (error) {
       console.error("Error updating student status:", error);
+    }
+  };
+
+  const createOrUpdateTripAndAttendance = async (student, oldStatus, newStatus) => {
+    if (!student || !student.parentId) {
+      console.log('❌ Missing student or parentId:', student);
+      return;
+    }
+
+    try {
+      console.log('📝 Creating/updating records for:', student.name, 'Status:', oldStatus, '->', newStatus);
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Status transitions that indicate trip events
+      const pickupStatuses = ['picked-up', 'picked_up'];
+      const dropoffStatuses = ['dropped-at-home', 'dropped_at_home', 'dropped-at-school'];
+
+      // 1. Create trip record when picked up
+      if (pickupStatuses.includes(newStatus) && !pickupStatuses.includes(oldStatus)) {
+        console.log('🚀 Creating new trip...');
+        
+        const tripData = {
+          parentId: student.parentId,
+          driverId: user.uid,
+          childId: student.id,
+          childName: student.fullName || student.name,
+          pickupAddress: student.pickupAddress || 'Home',
+          dropoffAddress: student.dropoffAddress || 'School',
+          status: 'in-progress',
+          startTime: serverTimestamp(),
+          createdAt: serverTimestamp()
+        };
+        
+        console.log('Trip data:', tripData);
+        const tripRef = await addDoc(collection(db, 'trips'), tripData);
+        console.log('✅ Trip created with ID:', tripRef.id);
+
+        // Create attendance record for today
+        const attendanceData = {
+          studentId: student.id,
+          studentName: student.fullName || student.name,
+          driverId: user.uid,
+          parentId: student.parentId,
+          date: serverTimestamp(),
+          pickupTime: serverTimestamp(),
+          status: 'present',
+          createdAt: serverTimestamp()
+        };
+        
+        console.log('Attendance data:', attendanceData);
+        const attendanceRef = await addDoc(collection(db, 'attendance'), attendanceData);
+        console.log('✅ Attendance created with ID:', attendanceRef.id);
+      }
+
+      // 2. Complete trip when dropped off
+      if (dropoffStatuses.includes(newStatus)) {
+        console.log('🏁 Completing trip...');
+        
+        // Find and update the latest trip record
+        const tripsRef = collection(db, 'trips');
+        const tripsQuery = query(tripsRef);
+        const tripsSnap = await getDocs(tripsQuery);
+        
+        console.log('Found', tripsSnap.docs.length, 'total trips');
+        
+        const latestTrip = tripsSnap.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter(trip => {
+            console.log('Checking trip:', trip.childId, '===', student.id, '&&', trip.status, '=== in-progress');
+            return trip.childId === student.id && trip.status === 'in-progress';
+          })
+          .sort((a, b) => {
+            const aTime = a.startTime?.toMillis?.() || 0;
+            const bTime = b.startTime?.toMillis?.() || 0;
+            return bTime - aTime;
+          })[0];
+
+        if (latestTrip) {
+          console.log('✅ Found in-progress trip:', latestTrip.id);
+          await updateDoc(doc(db, 'trips', latestTrip.id), {
+            status: 'completed',
+            endTime: serverTimestamp(),
+            completedAt: serverTimestamp()
+          });
+          console.log('✅ Trip completed');
+        } else {
+          console.log('⚠️ No in-progress trip found for student:', student.id);
+        }
+
+        // Update attendance with dropoff time
+        const attendanceRef = collection(db, 'attendance');
+        const attendanceQuery = query(attendanceRef);
+        const attendanceSnap = await getDocs(attendanceQuery);
+        
+        console.log('Found', attendanceSnap.docs.length, 'total attendance records');
+        
+        const todayAttendance = attendanceSnap.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter(att => {
+            const attDate = att.date?.toDate?.() || new Date(att.date);
+            attDate.setHours(0, 0, 0, 0);
+            const match = att.studentId === student.id && attDate.getTime() === today.getTime();
+            console.log('Checking attendance:', att.studentId, '===', student.id, '&&', attDate.getTime(), '===', today.getTime(), '=', match);
+            return match;
+          })[0];
+
+        if (todayAttendance) {
+          console.log('✅ Found today\'s attendance:', todayAttendance.id);
+          await updateDoc(doc(db, 'attendance', todayAttendance.id), {
+            dropoffTime: serverTimestamp(),
+            status: 'present'
+          });
+          console.log('✅ Attendance updated');
+        } else {
+          console.log('⚠️ No attendance record found for today for student:', student.id);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error creating/updating trip and attendance:', error);
+      console.error('Error details:', error.message, error.stack);
     }
   };
 

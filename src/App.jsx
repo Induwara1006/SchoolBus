@@ -4,6 +4,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './firebase';
 import { ThemeProvider } from './contexts/ThemeContext';
 import ThemeToggle from './components/ThemeToggle';
+import NotificationCenter from './components/NotificationCenter';
 import SubscriptionDashboard from './components/SubscriptionDashboard';
 import './App.css';
 import Login from './pages/Login.jsx';
@@ -98,6 +99,7 @@ function AppContent() {
           <span>School Transport</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          {user && <NotificationCenter userRole={userRole} />}
           <ThemeToggle />
           {location.pathname !== '/' && (
             <nav className="nav">
@@ -141,11 +143,11 @@ function AppContent() {
         <Route
           path="/"
           element={
-            <div className="card">
+            <div className="card" style={{ textAlign: 'center', margin: '0 auto', maxWidth: '600px' }}>
               <h3>School Transport System</h3>
               <h4 style={{ marginTop: 20, marginBottom: 16 }}>What would you like to do?</h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 450 }}>
-                <Link className="btn btn-primary" to="/login?role=driver" style={{ padding: '20px 24px', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <Link className="btn btn-primary" to="/login?role=driver" style={{ padding: '20px 24px', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 16, textDecoration: 'none' }}>
                   <span style={{ fontSize: '1.5em', fontWeight: 'bold', minWidth: '30px' }}>🚌</span>
                   <div>
                     <div style={{ fontSize: '1.1em', fontWeight: 600 }}>Driver Dashboard</div>
@@ -154,7 +156,7 @@ function AppContent() {
                     </div>
                   </div>
                 </Link>
-                <Link className="btn btn-primary" to="/login?role=parent" style={{ padding: '20px 24px', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 16 }}>
+                <Link className="btn btn-primary" to="/login?role=parent" style={{ padding: '20px 24px', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 16, textDecoration: 'none' }}>
                   <span style={{ fontSize: '1.5em', fontWeight: 'bold', minWidth: '30px' }}>👨‍👩‍👧‍👦</span>
                   <div>
                     <div style={{ fontSize: '1.1em', fontWeight: 600 }}>Parent Dashboard</div>

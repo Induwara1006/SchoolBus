@@ -254,22 +254,6 @@ export default function Login() {
 
           {(selectedRole || searchParams.get('role')) && (
             <div>
-              <p className="muted" style={{ marginBottom: 20 }}>
-                Sign in as {selectedRole || searchParams.get('role')}
-              </p>
-
-              {/* Debug Info */}
-              <div style={{ 
-                background: '#f0f0f0', 
-                padding: '8px', 
-                borderRadius: '4px', 
-                marginBottom: '16px',
-                fontSize: '0.8em',
-                fontFamily: 'monospace'
-              }}>
-                Debug: selectedRole="{selectedRole}", urlRole="{searchParams.get('role')}"
-              </div>
-
               {/* Auth Mode Toggle */}
               <div style={{ marginBottom: 20 }}>
                 <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
