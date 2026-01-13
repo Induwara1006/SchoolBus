@@ -1,0 +1,275 @@
+.subscription-dashboard {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.subscription-dashboard h2 {
+  margin-bottom: 24px;
+  color: var(--primary);
+}
+
+.section {
+  margin-bottom: 32px;
+}
+
+.section h3 {
+  margin-bottom: 16px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Agreement Cards */
+.agreement-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+  transition: all 0.3s ease;
+}
+
+.agreement-card:hover {
+  box-shadow: 0 4px 12px var(--shadow);
+}
+
+.agreement-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.agreement-header h4 {
+  margin: 0;
+  color: var(--text);
+}
+
+.agreement-details {
+  margin-bottom: 20px;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.agreement-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+/* Subscription Cards */
+.subscription-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.subscription-card:hover {
+  box-shadow: 0 6px 20px var(--shadow);
+  transform: translateY(-2px);
+}
+
+.subscription-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.subscription-header h4 {
+  margin: 0;
+  color: var(--text);
+}
+
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  color: white;
+  font-size: 0.8em;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.subscription-details {
+  margin-bottom: 20px;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-item .label {
+  font-size: 0.9em;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.detail-item .value {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.subscription-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+/* Payment History */
+.payment-history {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.payment-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  transition: background-color 0.3s ease;
+}
+
+.payment-row:last-child {
+  border-bottom: none;
+}
+
+.payment-row:hover {
+  background: var(--button-bg);
+}
+
+.payment-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.payment-amount {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 1.1em;
+}
+
+.payment-date {
+  font-size: 0.9em;
+  color: var(--muted);
+}
+
+.payment-status {
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.empty-state h3 {
+  color: var(--text);
+  margin-bottom: 12px;
+}
+
+.empty-state p {
+  color: var(--muted);
+  max-width: 500px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+/* Badge Styles */
+.badge-warning {
+  background-color: #f59e0b;
+  color: #92400e;
+}
+
+.dark-theme .badge-warning {
+  background-color: #d97706;
+  color: #fef3c7;
+}
+
+/* Button Variants */
+.btn-secondary {
+  background: var(--button-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+  background: var(--button-hover);
+}
+
+/* Loading State */
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: var(--muted);
+  font-size: 1.1em;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  .subscription-dashboard {
+    padding: 16px;
+  }
+
+  .agreement-header,
+  .subscription-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agreement-actions,
+  .subscription-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .agreement-actions .btn,
+  .subscription-actions .btn {
+    width: 100%;
+  }
+
+  .payment-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}

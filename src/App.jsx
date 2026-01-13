@@ -1,17 +1,14 @@
 import { BrowserRouter, Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { auth } from './firebase';
+import { auth } from './lib/firebase';
 import { ThemeProvider } from './contexts/ThemeContext';
-import ThemeToggle from './components/ThemeToggle';
-import NotificationCenter from './components/NotificationCenter';
-import SubscriptionDashboard from './components/SubscriptionDashboard';
+import { ThemeToggle, NotificationCenter } from './features/shared';
+import { SubscriptionDashboard } from './features/subscription';
 import './App.css';
-import Login from './pages/Login.jsx';
-import Parent from './pages/Parent.jsx';
-import Driver from './pages/Driver.jsx';
-import FindDrivers from './pages/FindDrivers.jsx';
-import DriverProfile from './pages/DriverProfile.jsx';
+import { Login } from './features/authentication';
+import { ParentDashboard } from './features/parent';
+import { DriverDashboard, DriverProfile, FindDrivers } from './features/driver';
 
 function LogoutConfirmationModal({ isOpen, onClose, onConfirm }) {
   if (!isOpen) return null;
@@ -173,8 +170,8 @@ function AppContent() {
         <Route path="/login" element={<Login />} />
         <Route path="/find-drivers" element={<FindDrivers />} />
         <Route path="/driver-profile" element={<DriverProfile />} />
-        <Route path="/parent" element={<Parent />} />
-        <Route path="/driver" element={<Driver />} />
+        <Route path="/parent" element={<ParentDashboard />} />
+        <Route path="/driver" element={<DriverDashboard />} />
         <Route path="/subscriptions" element={<SubscriptionDashboard />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
