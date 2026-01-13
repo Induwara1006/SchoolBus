@@ -46,7 +46,6 @@ export default function Login() {
       const urlRole = searchParams.get('role');
       const savedRole = localStorage.getItem('user.role') || '';
       const roleToUse = urlRole || savedRole;
-      console.log('Setting role for logged in user:', { urlRole, savedRole, roleToUse });
       setSelectedRole(roleToUse);
       
       // Auto-save role from URL if present
@@ -55,7 +54,6 @@ export default function Login() {
       }
     } else {
       const urlRole = searchParams.get('role');
-      console.log('Setting role for logged out user:', { urlRole });
       setSelectedRole(urlRole || '');
       
       // Set role from URL parameter even when not logged in
@@ -67,14 +65,12 @@ export default function Login() {
 
   const handleLogin = async () => {
     try {
-      console.log('Starting Google login process...');
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
-      console.log('Login successful, user:', user.email);
       
       await saveUserToFirestore(user, selectedRole);
     } catch (e) {
-      console.error('Google login error:', e);
+      if (import.meta.env.DEV) console.error('Google login error:', e);
       const code = e?.code || '';
       let hint = '';
       if (code === 'auth/configuration-not-found' || code === 'auth/operation-not-allowed') {
@@ -111,23 +107,19 @@ export default function Login() {
           return;
         }
         
-        console.log('Creating new user account...');
         const result = await createUserWithEmailAndPassword(auth, email, password);
         user = result.user;
         
         // Update the user's display name
         await updateProfile(user, { displayName: name });
-        console.log('Account created successfully');
       } else {
-        console.log('Signing in existing user...');
         const result = await signInWithEmailAndPassword(auth, email, password);
         user = result.user;
-        console.log('Login successful');
       }
 
       await saveUserToFirestore(user, currentRole);
     } catch (e) {
-      console.error('Email auth error:', e);
+      if (import.meta.env.DEV) console.error('Email auth error:', e);
       let message = e.message;
       
       if (e.code === 'auth/email-already-in-use') {
@@ -154,7 +146,6 @@ export default function Login() {
       if (finalRole) {
         localStorage.setItem('user.role', finalRole);
         
-        console.log('Writing to Firestore...');
         // Store user info in Firestore
         await setDoc(
           doc(db, 'users', user.uid),
@@ -168,7 +159,6 @@ export default function Login() {
           },
           { merge: true }
         );
-        console.log('Firestore write successful!');
         
         // Redirect directly to the appropriate page after login
         if (finalRole === 'driver') {
@@ -178,7 +168,7 @@ export default function Login() {
         }
       }
     } catch (error) {
-      console.error('Error saving to Firestore:', error);
+      if (import.meta.env.DEV) console.error('Error saving to Firestore:', error);
     }
   };
 
@@ -200,7 +190,7 @@ export default function Login() {
       // Navigate to login page
       navigate('/login');
     } catch (error) {
-      console.error('Error signing out:', error);
+      if (import.meta.env.DEV) console.error('Error signing out:', error);
     }
   };
 

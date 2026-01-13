@@ -21,8 +21,8 @@ export default function FindDrivers() {
   });
 
   useEffect(() => {
-    console.log('FindDrivers component mounted');
-    console.log('Current user role from localStorage:', localStorage.getItem('user.role'));
+
+
     const unsubscribe = onAuthStateChanged(auth, setUser);
     fetchDrivers();
     return () => unsubscribe();
@@ -45,16 +45,14 @@ export default function FindDrivers() {
   const fetchDrivers = async () => {
     try {
       setLoading(true);
-      console.log('Fetching drivers...');
+
       const q = query(collection(db, 'users'), where('role', '==', 'driver'));
       const querySnapshot = await getDocs(q);
-      
-      console.log('Query snapshot size:', querySnapshot.size);
-      
+
       const driverList = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        console.log('Driver document:', doc.id, data);
+
         if (data.isAvailable !== false) { // Only show available drivers
           driverList.push({
             id: doc.id,
@@ -62,12 +60,11 @@ export default function FindDrivers() {
           });
         }
       });
-      
-      console.log('Final driver list:', driverList);
+
       setDrivers(driverList);
       setFilteredDrivers(driverList);
     } catch (error) {
-      console.error('Error fetching drivers:', error);
+
     } finally {
       setLoading(false);
     }
@@ -99,41 +96,25 @@ export default function FindDrivers() {
   };
 
   const handleSubmitRequest = async () => {
-    console.log("🚌 FIND DRIVERS: Starting request submission...");
-    console.log("🚌 FIND DRIVERS: User state:", {
-      userExists: !!user,
-      userUID: user?.uid,
-      userEmail: user?.email
-    });
-    console.log("🚌 FIND DRIVERS: Selected driver:", selectedDriver);
-    console.log("🚌 FIND DRIVERS: Request data:", requestData);
-    
+
+
+
+
     if (!selectedDriver || !user) {
-      console.error("❌ FIND DRIVERS: Missing selectedDriver or user");
+
       return;
     }
     
     // Validate required fields
     if (!requestData.childName || !requestData.pickupAddress || !requestData.dropoffAddress) {
-      console.error("❌ FIND DRIVERS: Missing required fields:", {
-        childName: requestData.childName,
-        pickupAddress: requestData.pickupAddress,
-        dropoffAddress: requestData.dropoffAddress
-      });
+
       alert('Please fill in all required fields.');
       return;
     }
 
     try {
-      console.log("🚌 FIND DRIVERS: Sending request to driver:", selectedDriver.displayName);
-      console.log("🚌 FIND DRIVERS: Request data:", {
-        driverId: selectedDriver.id,
-        driverName: selectedDriver.displayName,
-        childName: requestData.childName,
-        pickupAddress: requestData.pickupAddress,
-        dropoffAddress: requestData.dropoffAddress
-      });
-      
+
+
       const docRef = await addDoc(collection(db, 'rideRequests'), {
         driverId: selectedDriver.id,
         driverName: selectedDriver.displayName,
@@ -153,8 +134,6 @@ export default function FindDrivers() {
         notes: requestData.additionalNotes
       });
 
-      console.log("✅ FIND DRIVERS: Request sent successfully with ID:", docRef.id);
-      console.log("✅ FIND DRIVERS: Driver should see this request immediately");
 
       alert('Request sent successfully! The driver will review your request and respond.');
       setShowRequestModal(false);
@@ -167,20 +146,11 @@ export default function FindDrivers() {
         additionalNotes: ''
       });
     } catch (error) {
-      console.error('❌ FIND DRIVERS: Error sending request:', error);
-      console.error('❌ FIND DRIVERS: Error details:', {
-        code: error.code,
-        message: error.message,
-        stack: error.stack
-      });
-      console.error('❌ FIND DRIVERS: User state:', {
-        userExists: !!user,
-        userUID: user?.uid,
-        userEmail: user?.email
-      });
-      console.error('❌ FIND DRIVERS: Selected driver:', selectedDriver);
-      console.error('❌ FIND DRIVERS: Request data:', requestData);
-      
+
+
+
+
+
       alert(`Failed to send request: ${error.message}. Please try again.`);
     }
   };

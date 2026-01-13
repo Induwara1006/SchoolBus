@@ -18,9 +18,9 @@ export async function createNotification(userId, type, title, message) {
       read: false,
       createdAt: serverTimestamp()
     });
-    console.log('Notification created:', { userId, type, title });
+
   } catch (error) {
-    console.error('Error creating notification:', error);
+
   }
 }
 

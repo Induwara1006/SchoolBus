@@ -4,7 +4,7 @@ import { db, auth } from '../firebase';
 
 const SubscriptionManager = () => {
   const [subscriptions, setSubscriptions] = useState([]);
-  const [agreements, setAgreements] = useState([]);
+  // const [agreements, setAgreements] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

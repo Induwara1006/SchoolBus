@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, addDoc, serverTimestamp, orderBy } from 'firebase/firestore';
+import { useState, useEffect, useCallback } from 'react';
+import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 
 export default function AttendanceTracker({ userRole, studentId = null, studentName = null }) {
@@ -13,11 +13,7 @@ export default function AttendanceTracker({ userRole, studentId = null, studentN
     attendanceRate: 0
   });
 
-  useEffect(() => {
-    fetchAttendance();
-  }, [dateRange, studentId]);
-
-  const fetchAttendance = async () => {
+  const fetchAttendance = useCallback(async () => {
     if (!auth.currentUser) return;
     
     setLoading(true);
@@ -25,8 +21,6 @@ export default function AttendanceTracker({ userRole, studentId = null, studentN
       const daysAgo = new Date();
       daysAgo.setDate(daysAgo.getDate() - parseInt(dateRange));
       daysAgo.setHours(0, 0, 0, 0);
-
-      console.log('📊 Fetching attendance for studentId:', studentId, 'dateRange:', dateRange, 'daysAgo:', daysAgo);
 
       let q;
       if (userRole === 'parent' && studentId) {
@@ -44,16 +38,15 @@ export default function AttendanceTracker({ userRole, studentId = null, studentN
       }
 
       if (!q) {
-        console.log('⚠️ No query created');
+
         return;
       }
 
       const snapshot = await getDocs(q);
-      console.log('📊 Raw attendance records from Firestore:', snapshot.docs.length);
-      
+
       const attendanceData = snapshot.docs.map(doc => {
         const data = doc.data();
-        console.log('📄 Record:', { id: doc.id, ...data });
+
         return {
           id: doc.id,
           ...data
@@ -66,19 +59,23 @@ export default function AttendanceTracker({ userRole, studentId = null, studentN
         const recordMidnight = new Date(recordDate);
         recordMidnight.setHours(0, 0, 0, 0);
         const isInRange = recordMidnight >= daysAgo;
-        console.log('🗓️ Date check:', recordMidnight, '>=', daysAgo, '=', isInRange);
+
         return isInRange;
       });
 
-      console.log('📊 Attendance records fetched:', attendanceData.length, 'Filtered:', filtered.length);
       setAttendance(filtered);
       calculateStats(filtered);
-    } catch (error) {
-      console.error('Error fetching attendance:', error);
+    } catch (err) {
+      // Silently handle error in production
+      if (import.meta.env.DEV) console.error('Attendance fetch error:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [dateRange, studentId, userRole]);
+
+  useEffect(() => {
+    fetchAttendance();
+  }, [fetchAttendance]);
 
   const calculateStats = (records) => {
     const present = records.filter(r => r.status === 'present').length;

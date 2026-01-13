@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { auth, db } from "../firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, onSnapshot, query, updateDoc, doc, serverTimestamp, addDoc, getDocs, where } from "firebase/firestore";
@@ -19,30 +19,30 @@ export default function Driver() {
   useEffect(() => {
     if (!user) return;
     
-    const q = query(collection(db, "students"));
-    const unsub = onSnapshot(q, (s) => {
-      const allStudents = s.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setStudents(allStudents);
+    // Only load students assigned to this driver
+    const studentsQuery = query(
+      collection(db, "students"),
+      where("driverId", "==", user.uid)
+    );
+    const unsub = onSnapshot(studentsQuery, (s) => {
+      const driverStudents = s.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setStudents(driverStudents);
     });
 
-    // Listen for ride requests
+    // Listen for ride requests relevant to this driver only
     const requestsQuery = query(collection(db, "rideRequests"));
     const unsubRequests = onSnapshot(requestsQuery, (snap) => {
-      const requests = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      console.log("Driver: Raw ride requests from Firestore:", requests);
-      console.log("Driver: Number of requests:", requests.length);
-      requests.forEach((req, index) => {
-        console.log(`Driver: Request ${index + 1}:`, {
-          id: req.id,
-          status: req.status,
-          childName: req.childName,
-          parentEmail: req.parentEmail,
-          createdAt: req.createdAt
-        });
+      const allRequests = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+      // Show only requests targeted to this driver, or general ones
+      const driverRequests = allRequests.filter((req) => {
+        if (!req.driverId) return true; // general requests (no driver assigned yet)
+        return req.driverId === user.uid;
       });
-      setRideRequests(requests);
+
+      setRideRequests(driverRequests);
     }, (error) => {
-      console.error("Driver: Error listening to ride requests:", error);
+
     });
 
     // Listen for subscriptions where this driver is assigned
@@ -51,10 +51,10 @@ export default function Driver() {
       const allSubscriptions = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       // Filter subscriptions for this driver
       const driverSubscriptions = allSubscriptions.filter(sub => sub.driverId === user.uid);
-      console.log("Driver: Loaded subscriptions:", driverSubscriptions);
+
       setSubscriptions(driverSubscriptions);
     }, (error) => {
-      console.error("Driver: Error listening to subscriptions:", error);
+
     });
 
     return () => {
@@ -66,9 +66,9 @@ export default function Driver() {
 
   const updateStudentStatus = async (studentId, newStatus) => {
     try {
-      console.log('🔵 updateStudentStatus called with:', studentId, newStatus);
+
       const student = students.find(s => s.id === studentId);
-      console.log('🔵 Found student:', student);
+
       const oldStatus = student?.status;
 
       await updateDoc(doc(db, "students", studentId), {
@@ -85,19 +85,18 @@ export default function Driver() {
       // Create or update trip and attendance records
       await createOrUpdateTripAndAttendance(student, oldStatus, newStatus);
     } catch (error) {
-      console.error("Error updating student status:", error);
+
     }
   };
 
   const createOrUpdateTripAndAttendance = async (student, oldStatus, newStatus) => {
     if (!student || !student.parentId) {
-      console.log('❌ Missing student or parentId:', student);
+
       return;
     }
 
     try {
-      console.log('📝 Creating/updating records for:', student.name, 'Status:', oldStatus, '->', newStatus);
-      
+
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
@@ -107,8 +106,7 @@ export default function Driver() {
 
       // 1. Create trip record when picked up
       if (pickupStatuses.includes(newStatus) && !pickupStatuses.includes(oldStatus)) {
-        console.log('🚀 Creating new trip...');
-        
+
         const tripData = {
           parentId: student.parentId,
           driverId: user.uid,
@@ -120,10 +118,8 @@ export default function Driver() {
           startTime: serverTimestamp(),
           createdAt: serverTimestamp()
         };
-        
-        console.log('Trip data:', tripData);
+
         const tripRef = await addDoc(collection(db, 'trips'), tripData);
-        console.log('✅ Trip created with ID:', tripRef.id);
 
         // Create attendance record for today
         const attendanceData = {
@@ -136,27 +132,23 @@ export default function Driver() {
           status: 'present',
           createdAt: serverTimestamp()
         };
-        
-        console.log('Attendance data:', attendanceData);
+
         const attendanceRef = await addDoc(collection(db, 'attendance'), attendanceData);
-        console.log('✅ Attendance created with ID:', attendanceRef.id);
+
       }
 
       // 2. Complete trip when dropped off
       if (dropoffStatuses.includes(newStatus)) {
-        console.log('🏁 Completing trip...');
-        
+
         // Find and update the latest trip record
         const tripsRef = collection(db, 'trips');
         const tripsQuery = query(tripsRef);
         const tripsSnap = await getDocs(tripsQuery);
-        
-        console.log('Found', tripsSnap.docs.length, 'total trips');
-        
+
         const latestTrip = tripsSnap.docs
           .map(doc => ({ id: doc.id, ...doc.data() }))
           .filter(trip => {
-            console.log('Checking trip:', trip.childId, '===', student.id, '&&', trip.status, '=== in-progress');
+
             return trip.childId === student.id && trip.status === 'in-progress';
           })
           .sort((a, b) => {
@@ -166,48 +158,46 @@ export default function Driver() {
           })[0];
 
         if (latestTrip) {
-          console.log('✅ Found in-progress trip:', latestTrip.id);
+
           await updateDoc(doc(db, 'trips', latestTrip.id), {
             status: 'completed',
             endTime: serverTimestamp(),
             completedAt: serverTimestamp()
           });
-          console.log('✅ Trip completed');
+
         } else {
-          console.log('⚠️ No in-progress trip found for student:', student.id);
+
         }
 
         // Update attendance with dropoff time
         const attendanceRef = collection(db, 'attendance');
         const attendanceQuery = query(attendanceRef);
         const attendanceSnap = await getDocs(attendanceQuery);
-        
-        console.log('Found', attendanceSnap.docs.length, 'total attendance records');
-        
+
         const todayAttendance = attendanceSnap.docs
           .map(doc => ({ id: doc.id, ...doc.data() }))
           .filter(att => {
             const attDate = att.date?.toDate?.() || new Date(att.date);
             attDate.setHours(0, 0, 0, 0);
             const match = att.studentId === student.id && attDate.getTime() === today.getTime();
-            console.log('Checking attendance:', att.studentId, '===', student.id, '&&', attDate.getTime(), '===', today.getTime(), '=', match);
+
             return match;
           })[0];
 
         if (todayAttendance) {
-          console.log('✅ Found today\'s attendance:', todayAttendance.id);
+
           await updateDoc(doc(db, 'attendance', todayAttendance.id), {
             dropoffTime: serverTimestamp(),
             status: 'present'
           });
-          console.log('✅ Attendance updated');
+
         } else {
-          console.log('⚠️ No attendance record found for today for student:', student.id);
+
         }
       }
     } catch (error) {
-      console.error('❌ Error creating/updating trip and attendance:', error);
-      console.error('Error details:', error.message, error.stack);
+
+
     }
   };
 
@@ -242,20 +232,19 @@ export default function Driver() {
 
   const getStatusIcon = (status) => {
     const icons = {
-      "at-home": "🏠",
-      "picked-up": "🚌",
-      "in-transit-to-school": "🚌➡️🏫",
-      "dropped-at-school": "🏫", 
-      "in-transit-to-home": "🚌➡️🏠",
-      "dropped-at-home": "✅"
+      "at-home": "??",
+      "picked-up": "??",
+      "in-transit-to-school": "??????",
+      "dropped-at-school": "??", 
+      "in-transit-to-home": "??????",
+      "dropped-at-home": "?"
     };
-    return icons[status] || "📍";
+    return icons[status] || "??";
   };
 
   const handleRequestResponse = async (requestId, status, responseMessage = '') => {
     try {
-      console.log("Driver responding to request:", requestId, "with status:", status);
-      
+
       if (status === 'approved') {
         // Find the request details
         const request = rideRequests.find(r => r.id === requestId);
@@ -271,9 +260,9 @@ export default function Driver() {
         respondedAt: serverTimestamp(),
         respondedBy: user.uid
       });
-      console.log("Request response saved successfully");
+
     } catch (error) {
-      console.error("Error updating request:", error);
+
       alert("Failed to update request. Please try again.");
     }
   };
@@ -325,10 +314,9 @@ export default function Driver() {
       };
 
       await addDoc(collection(db, "subscriptions"), subscriptionData);
-      
-      console.log("Ongoing subscription created successfully");
+
     } catch (error) {
-      console.error("Error creating subscription:", error);
+
     }
   };
 
@@ -344,12 +332,12 @@ export default function Driver() {
 
   const getRequestStatusIcon = (status) => {
     const icons = {
-      'pending': '⏳',
-      'approved': '✅',
-      'rejected': '❌',
-      'completed': '🏁'
+      'pending': '?',
+      'approved': '?',
+      'rejected': '?',
+      'completed': '??'
     };
-    return icons[status] || '📋';
+    return icons[status] || '??';
   };
 
   // Filter requests - show both general requests and requests targeted to this driver
@@ -359,24 +347,17 @@ export default function Driver() {
   );
   
   // Debug logging for request filtering
-  console.log("Driver: Total ride requests:", rideRequests.length);
-  console.log("Driver: My driver ID:", user?.uid);
-  console.log("Driver: Pending requests for me:", pendingRequests.length);
-  console.log("Driver: All request details:", rideRequests.map(r => ({ 
-    id: r.id, 
-    status: r.status, 
-    driverId: r.driverId,
-    isForMe: r.driverId === user?.uid || !r.driverId,
-    childName: r.childName 
-  })));
-  
+
+
+
+
   const approvedRequests = rideRequests.filter(r => r.status === 'approved');
   const allRequests = rideRequests.filter(r => r.status !== 'pending');
 
   // Test function to create a dummy request for testing
   const createTestRequest = async () => {
     try {
-      console.log("Creating test request...");
+
       const testRequest = {
         childId: "test-child-id",
         childName: "Test Child",
@@ -391,10 +372,10 @@ export default function Driver() {
       };
       
       const docRef = await addDoc(collection(db, "rideRequests"), testRequest);
-      console.log("Test request created with ID:", docRef.id);
+
       alert("Test request created successfully!");
     } catch (error) {
-      console.error("Error creating test request:", error);
+
       alert("Failed to create test request: " + error.message);
     }
   };
@@ -464,7 +445,7 @@ export default function Driver() {
             fontWeight: '500'
           }}
         >
-          👥 Students ({students.length})
+          ?? Students ({students.length})
         </button>
         <button 
           onClick={() => setActiveTab('requests')}
@@ -480,7 +461,7 @@ export default function Driver() {
             position: 'relative'
           }}
         >
-          🚌 Ride Requests ({rideRequests.length})
+          ?? Ride Requests ({rideRequests.length})
           {pendingRequests.length > 0 && (
             <span style={{ 
               position: 'absolute',
@@ -513,7 +494,7 @@ export default function Driver() {
             fontWeight: '500'
           }}
         >
-          📋 Subscriptions ({subscriptions.length})
+          ?? Subscriptions ({subscriptions.length})
         </button>
       </div>
 
@@ -612,7 +593,7 @@ export default function Driver() {
           {pendingRequests.length > 0 && (
             <div style={{ marginBottom: '24px' }}>
               <h4 style={{ color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                ⏳ Pending Requests ({pendingRequests.length})
+                ? Pending Requests ({pendingRequests.length})
               </h4>
               <div style={{ display: 'grid', gap: '12px' }}>
                 {pendingRequests.map((request) => (
@@ -637,7 +618,7 @@ export default function Driver() {
                               fontSize: '0.8em',
                               fontWeight: '500'
                             }}>
-                              🚨 EMERGENCY
+                              ?? EMERGENCY
                             </span>
                           )}
                           {request.driverId === user?.uid && (
@@ -649,7 +630,7 @@ export default function Driver() {
                               fontSize: '0.8em',
                               fontWeight: '500'
                             }}>
-                              🎯 TARGETED TO YOU
+                              ?? TARGETED TO YOU
                             </span>
                           )}
                         </div>
@@ -662,7 +643,7 @@ export default function Driver() {
                             <div><strong>Notes:</strong> {request.notes}</div>
                           )}
                           <div style={{ fontSize: '0.8em', color: '#666', marginTop: '8px' }}>
-                            🕒 Requested: {request.createdAt?.toDate?.().toLocaleString?.() || 'Unknown'}
+                            ?? Requested: {request.createdAt?.toDate?.().toLocaleString?.() || 'Unknown'}
                           </div>
                         </div>
                         
@@ -679,7 +660,7 @@ export default function Driver() {
                               fontSize: '0.9em'
                             }}
                           >
-                            ✅ Approve
+                            ? Approve
                           </button>
                           <button 
                             onClick={() => handleRequestResponse(request.id, 'rejected', 'Request rejected by driver')}
@@ -693,7 +674,7 @@ export default function Driver() {
                               fontSize: '0.9em'
                             }}
                           >
-                            ❌ Reject
+                            ? Reject
                           </button>
                         </div>
                       </div>
@@ -707,7 +688,7 @@ export default function Driver() {
           {/* All Requests History */}
           {allRequests.length > 0 && (
             <div>
-              <h4>📋 Request History ({allRequests.length})</h4>
+              <h4>?? Request History ({allRequests.length})</h4>
               <div style={{ display: 'grid', gap: '12px' }}>
                 {allRequests.map((request) => (
                   <div key={request.id} style={{ 

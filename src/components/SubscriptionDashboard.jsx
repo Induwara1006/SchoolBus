@@ -53,7 +53,8 @@ const SubscriptionDashboard = () => {
       unsubscribeAgreements();
       unsubscribePayments();
     };
-  }, [subscriptions.length]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { processPayment, cancelSubscription } = SubscriptionManager();
 
@@ -83,7 +84,7 @@ const SubscriptionDashboard = () => {
       });
       alert('Agreement signed successfully! Your transport service is now active.');
     } catch (error) {
-      console.error('Error signing agreement:', error);
+      if (import.meta.env.DEV) console.error('Error signing agreement:', error);
       alert('Failed to sign agreement. Please try again.');
     }
   };

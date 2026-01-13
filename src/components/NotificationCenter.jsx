@@ -3,7 +3,7 @@ import { collection, query, where, onSnapshot, updateDoc, doc, orderBy, limit } 
 import { db, auth } from '../firebase';
 import './NotificationCenter.css';
 
-export default function NotificationCenter({ userRole }) {
+export default function NotificationCenter() {
   const [notifications, setNotifications] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);

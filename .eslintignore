@@ -1,0 +1,10 @@
+# Test and sample data files
+firestore-sample-data.js
+test-data.js
+
+# Backup files
+src/pages/Login_backup.jsx
+
+# Build output
+dist/
+node_modules/

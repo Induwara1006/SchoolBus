@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { calculateBusETA, formatETA } from '../utils/eta';
+import { calculateBusETA } from '../utils/eta';
 
-export default function ETADisplay({ busLocation, childLocation, childName }) {
+export default function ETADisplay({ busLocation, childLocation }) {
   const [eta, setEta] = useState(null);
 
   useEffect(() => {

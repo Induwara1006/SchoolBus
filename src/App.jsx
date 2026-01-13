@@ -84,7 +84,8 @@ function AppContent() {
       setShowLogoutModal(false);
       navigate('/');
     } catch (error) {
-      console.error('Logout error:', error);
+      // Silent error handling in production
+      if (import.meta.env.DEV) console.error('Logout error:', error);
     }
   };
 

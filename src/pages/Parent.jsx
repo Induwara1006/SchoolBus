@@ -106,7 +106,7 @@ export default function Parent() {
     const q = query(collection(db, "students"), where("parentId", "==", user.uid));
     const unsubStudents = onSnapshot(q, (snap) => {
       const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      console.log("Parent: Loaded students:", data);
+
       setChildren(data);
 
       // Subscribe to bus locations for all children's buses
@@ -123,37 +123,37 @@ export default function Parent() {
         });
       });
     }, (error) => {
-      console.error("Error loading students:", error);
+
     });
 
     // Query ride requests for this parent
     const requestsQuery = query(collection(db, "rideRequests"), where("parentId", "==", user.uid));
     const unsubRequests = onSnapshot(requestsQuery, (snap) => {
       const requests = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      console.log("Parent: Loaded ride requests:", requests);
+
       setRideRequests(requests);
     }, (error) => {
-      console.error("Error listening to ride requests:", error);
+
     });
 
     // Query subscriptions for this parent
     const subscriptionsQuery = query(collection(db, "subscriptions"), where("parentId", "==", user.uid));
     const unsubSubscriptions = onSnapshot(subscriptionsQuery, (snap) => {
       const subs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      console.log("Parent: Loaded subscriptions:", subs);
+
       setSubscriptions(subs);
     }, (error) => {
-      console.error("Error listening to subscriptions:", error);
+
     });
 
     // Query payments for this parent
     const paymentsQuery = query(collection(db, "payments"), where("parentId", "==", user.uid));
     const unsubPayments = onSnapshot(paymentsQuery, (snap) => {
       const paymentsList = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      console.log("Parent: Loaded payments:", paymentsList);
+
       setPayments(paymentsList);
     }, (error) => {
-      console.error("Error listening to payments:", error);
+
     });
 
     return () => {
@@ -177,10 +177,9 @@ export default function Parent() {
   // Google Pay payment processing functions
   const processGooglePayPayment = async (paymentData, subscription) => {
     try {
-      console.log("🔄 Processing Google Pay payment...");
-      console.log("💰 Amount:", subscription.monthlyFee || subscription.amount, "LKR");
-      console.log("👶 Student:", subscription.studentName);
-      
+
+
+
       // In a real implementation, you would:
       // 1. Send paymentData to your backend
       // 2. Verify the payment with Google Pay
@@ -188,8 +187,7 @@ export default function Parent() {
       // 4. Return success/failure
       
       // For now, we'll simulate the backend processing
-      console.log("📤 Sending payment data to backend:", paymentData);
-      
+
       // Simulate API call to backend
       const response = await fetch('/api/process-google-pay', {
         method: 'POST',
@@ -207,17 +205,17 @@ export default function Parent() {
       
       if (response.ok) {
         const result = await response.json();
-        console.log("✅ Google Pay payment successful:", result);
+
         return { success: true, transactionId: result.transactionId };
       } else {
         throw new Error('Payment processing failed');
       }
     } catch (error) {
-      console.error("❌ Google Pay payment failed:", error);
+
       // For demo purposes, return success most of the time
       const demoSuccess = Math.random() > 0.1;
       if (demoSuccess) {
-        console.log("✅ Demo: Google Pay payment successful");
+
         return { 
           success: true, 
           transactionId: `GP_DEMO_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
@@ -278,9 +276,7 @@ export default function Parent() {
   const handlePay = async (student, paymentData = null) => {
     try {
       setPayingFor(student.id);
-      
-      console.log("🏦 Initiating Google Pay payment for student:", student.fullName);
-      
+
       let paymentResult;
       if (paymentData) {
         // Real Google Pay payment
@@ -318,7 +314,7 @@ export default function Parent() {
         throw new Error(paymentResult.error || "Payment was not successful");
       }
     } catch (error) {
-      console.error("Payment failed:", error);
+
       alert(`❌ Payment failed: ${error.message}`);
     } finally {
       setPayingFor(null);
@@ -337,7 +333,7 @@ export default function Parent() {
       });
       alert("Subscription cancelled successfully");
     } catch (error) {
-      console.error("Error cancelling subscription:", error);
+
       alert("Failed to cancel subscription. Please try again.");
     }
   };
@@ -352,8 +348,6 @@ export default function Parent() {
         throw new Error("Subscription not found");
       }
 
-      console.log("🏦 Initiating Google Pay payment for subscription:", subscription.studentName);
-      
       let paymentResult;
       if (paymentData) {
         // Real Google Pay payment
@@ -398,7 +392,7 @@ export default function Parent() {
         throw new Error(paymentResult.error || "Payment failed");
       }
     } catch (error) {
-      console.error("Payment failed:", error);
+
       alert(`❌ Payment failed: ${error.message}`);
     } finally {
       setPayingFor(null);
@@ -414,13 +408,7 @@ export default function Parent() {
 
     try {
       const selectedChild = children.find(c => c.id === requestData.childId);
-      console.log("Creating ride request with data:", {
-        ...requestData,
-        parentId: user.uid,
-        parentEmail: user.email,
-        childName: selectedChild?.fullName || 'Unknown'
-      });
-      
+
       const docRef = await addDoc(collection(db, "rideRequests"), {
         ...requestData,
         parentId: user.uid,
@@ -429,10 +417,8 @@ export default function Parent() {
         status: 'pending',
         createdAt: serverTimestamp(),
       });
-      
-      console.log("✅ PARENT: Ride request created successfully with ID:", docRef.id);
-      console.log("✅ PARENT: Request should appear in driver dashboard immediately");
-      
+
+
       // Reset form
       setRequestData({
         childId: '',
@@ -444,7 +430,7 @@ export default function Parent() {
       setShowRequestForm(false);
       alert("Ride request sent successfully!");
     } catch (error) {
-      console.error("Error sending request:", error);
+
       alert("Failed to send request. Please try again.");
     }
   };
@@ -480,13 +466,12 @@ export default function Parent() {
         monthlyFee: 2500,
         createdAt: serverTimestamp()
       };
-      
-      console.log("Creating test student:", testStudent);
+
       const docRef = await addDoc(collection(db, "students"), testStudent);
-      console.log("Test student created with ID:", docRef.id);
+
       alert("Test student created successfully!");
     } catch (error) {
-      console.error("Error creating test student:", error);
+
       alert("Failed to create test student: " + error.message);
     }
   };
@@ -895,14 +880,14 @@ export default function Parent() {
                             environment={GOOGLE_PAY_CONFIG.environment}
                             paymentRequest={createGooglePayRequest((child.monthlyFee || 2500) * 100, 'LKR')}
                             onLoadPaymentData={(paymentRequest) => {
-                              console.log('Google Pay payment data received for student:', paymentRequest);
+
                               handlePay(child, paymentRequest);
                             }}
                             onCancel={() => {
-                              console.log('Google Pay payment cancelled');
+
                             }}
                             onError={(error) => {
-                              console.error('Google Pay error:', error);
+
                               alert('Google Pay is not available. Please try again.');
                             }}
                             style={{
@@ -1068,14 +1053,14 @@ export default function Parent() {
                               environment={GOOGLE_PAY_CONFIG.environment}
                               paymentRequest={createGooglePayRequest(subscription.monthlyFee * 100, 'LKR')}
                               onLoadPaymentData={(paymentRequest) => {
-                                console.log('Google Pay payment data received:', paymentRequest);
+
                                 paySubscription(subscription.id, paymentRequest);
                               }}
                               onCancel={() => {
-                                console.log('Google Pay payment cancelled');
+
                               }}
                               onError={(error) => {
-                                console.error('Google Pay error:', error);
+
                                 alert('Google Pay is not available. Please try again.');
                               }}
                               style={{
