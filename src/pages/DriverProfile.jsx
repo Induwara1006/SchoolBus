@@ -313,7 +313,7 @@ export default function DriverProfile() {
             {saving ? 'Saving...' : 'Save Profile'}
           </button>
           
-          <div style={{ marginTop: 12, fontSize: '0.9em', color: '#666' }}>
+          <div style={{ marginTop: 12, fontSize: '0.9em', color: 'var(--muted)' }}>
             💡 Complete your profile to appear in parent searches and receive more inquiries
           </div>
         </div>

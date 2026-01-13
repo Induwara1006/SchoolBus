@@ -316,7 +316,7 @@ export default function Login() {
 
               {/* Divider */}
               <div style={{ textAlign: 'center', marginBottom: 16, position: 'relative' }}>
-                <span style={{ background: 'var(--bg)', padding: '0 12px', color: '#666' }}>OR</span>
+                <span style={{ background: 'var(--bg)', padding: '0 12px', color: 'var(--muted)' }}>OR</span>
                 <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: '1px', background: '#ddd', zIndex: -1 }}></div>
               </div>
 

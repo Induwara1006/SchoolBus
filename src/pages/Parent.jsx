@@ -590,12 +590,14 @@ export default function Parent() {
       {/* Debug Information */}
       {user && (
         <div style={{ 
-          background: '#f0f0f0', 
+          background: 'var(--card-bg)', 
+          border: '1px solid var(--border)',
           padding: '12px', 
-          borderRadius: '4px', 
+          borderRadius: '8px', 
           marginBottom: '16px',
           fontSize: '0.9em',
-          fontFamily: 'monospace'
+          fontFamily: 'monospace',
+          color: 'var(--text)'
         }}>
           <strong>Debug Info:</strong><br/>
           User ID: {user.uid}<br/>
@@ -723,7 +725,7 @@ export default function Parent() {
       <div style={{ marginBottom: 24 }}>
         <h3>Your Ride Requests ({rideRequests.length})</h3>
         {rideRequests.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "20px", color: "#666" }}>
+          <div style={{ textAlign: "center", padding: "20px", color: "var(--muted)" }}>
             No ride requests yet. Click "Request Ride" to send your first request.
           </div>
         ) : (
@@ -774,7 +776,7 @@ export default function Parent() {
                       {request.notes && (
                         <div><strong>Notes:</strong> {request.notes}</div>
                       )}
-                      <div style={{ fontSize: '0.8em', color: '#666', marginTop: '8px' }}>
+                      <div style={{ fontSize: '0.8em', color: 'var(--muted)', marginTop: '8px' }}>
                         🕒 Requested: {request.createdAt?.toDate?.().toLocaleString?.() || 'Unknown'}
                       </div>
                       {request.responseMessage && (
@@ -845,12 +847,12 @@ export default function Parent() {
                           <div>Bus ID: {child.busId}</div>
                         )}
                         {child.lastStatusUpdate && (
-                          <div style={{ fontSize: '0.8em', color: '#666', marginTop: '4px' }}>
+                          <div style={{ fontSize: '0.8em', color: 'var(--muted)', marginTop: '4px' }}>
                             🕒 Last updated: {child.lastStatusUpdate?.toDate?.().toLocaleString?.() || 'Unknown'}
                           </div>
                         )}
                         {busLocation && (
-                          <div style={{ fontSize: '0.8em', color: '#666' }}>
+                          <div style={{ fontSize: '0.8em', color: 'var(--muted)' }}>
                             📍 Bus location updated: {busLocation.updatedAt?.toDate?.().toLocaleTimeString?.() || 'Unknown'}
                           </div>
                         )}

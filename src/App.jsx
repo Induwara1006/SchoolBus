@@ -31,7 +31,7 @@ function LogoutConfirmationModal({ isOpen, onClose, onConfirm }) {
     }}>
       <div className="card" style={{ maxWidth: 400, margin: 0 }}>
         <h3>Confirm Logout</h3>
-        <p style={{ marginBottom: 20, color: '#666' }}>
+        <p style={{ marginBottom: 20, color: 'var(--muted)' }}>
           Are you sure you want to logout and return to the home page? You'll need to sign in again to access your dashboard.
         </p>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>

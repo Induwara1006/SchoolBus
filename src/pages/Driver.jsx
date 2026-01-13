@@ -385,12 +385,12 @@ export default function Driver() {
   return (
     <div className="container">
       <h2>Driver Panel</h2>
-      <div className="driver-info" style={{ background: "#f5f5f5", padding: "12px", borderRadius: "8px", marginBottom: "16px" }}>
+      <div className="driver-info card" style={{ padding: "12px", marginBottom: "16px" }}>
         <h3 style={{ margin: "0 0 8px 0" }}>Driver Profile</h3>
         <p style={{ margin: "4px 0" }}>
           <strong>Name:</strong> {user?.displayName || user?.email || "Driver"}
         </p>
-        <p style={{ margin: "4px 0", fontSize: "0.9em", color: "#666" }}>
+        <p style={{ margin: "4px 0", fontSize: "0.9em", color: "var(--muted)" }}>
           Managing daily transport for assigned students
         </p>
       </div>
@@ -398,12 +398,14 @@ export default function Driver() {
       {/* Debug Information */}
       {user && (
         <div style={{ 
-          background: '#f0f0f0', 
+          background: 'var(--card-bg)', 
+          border: '1px solid var(--border)',
           padding: '12px', 
-          borderRadius: '4px', 
+          borderRadius: '8px', 
           marginBottom: '16px',
           fontSize: '0.9em',
-          fontFamily: 'monospace'
+          fontFamily: 'monospace',
+          color: 'var(--text)'
         }}>
           <strong>Debug Info:</strong><br/>
           User ID: {user.uid}<br/>
@@ -438,8 +440,8 @@ export default function Driver() {
             padding: '8px 16px',
             border: 'none',
             borderRadius: '4px',
-            backgroundColor: activeTab === 'students' ? '#0d6efd' : '#f5f5f5',
-            color: activeTab === 'students' ? 'white' : '#666',
+              backgroundColor: activeTab === 'students' ? '#0d6efd' : 'var(--card-bg)',
+            color: activeTab === 'students' ? 'white' : 'var(--muted)',
             cursor: 'pointer',
             fontSize: '0.9em',
             fontWeight: '500'
@@ -453,8 +455,8 @@ export default function Driver() {
             padding: '8px 16px',
             border: 'none',
             borderRadius: '4px',
-            backgroundColor: activeTab === 'requests' ? '#0d6efd' : '#f5f5f5',
-            color: activeTab === 'requests' ? 'white' : '#666',
+            backgroundColor: activeTab === 'requests' ? '#0d6efd' : 'var(--card-bg)',
+            color: activeTab === 'requests' ? 'white' : 'var(--muted)',
             cursor: 'pointer',
             fontSize: '0.9em',
             fontWeight: '500',
@@ -487,8 +489,8 @@ export default function Driver() {
             padding: '8px 16px',
             border: 'none',
             borderRadius: '4px',
-            backgroundColor: activeTab === 'subscriptions' ? '#0d6efd' : '#f5f5f5',
-            color: activeTab === 'subscriptions' ? 'white' : '#666',
+            backgroundColor: activeTab === 'subscriptions' ? '#0d6efd' : 'var(--card-bg)',
+            color: activeTab === 'subscriptions' ? 'white' : 'var(--muted)',
             cursor: 'pointer',
             fontSize: '0.9em',
             fontWeight: '500'
@@ -502,12 +504,12 @@ export default function Driver() {
       {activeTab === 'students' && (
         <>
           <h3 style={{ marginTop: 16 }}>Students ({students.length})</h3>
-          <div style={{ fontSize: "0.9em", color: "#666", marginBottom: "12px" }}>
+          <div style={{ fontSize: "0.9em", color: "var(--muted)", marginBottom: "12px" }}>
             Click any status button to update a student's current status
           </div>
           
           {students.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "20px", color: "#666" }}>
+            <div style={{ textAlign: "center", padding: "20px", color: "var(--muted)" }}>
               No students found in the database
             </div>
           ) : (
@@ -523,14 +525,14 @@ export default function Driver() {
                     gap: 8, 
                     padding: "12px", 
                     marginBottom: "12px",
-                    background: "#f9f9f9",
+                    background: "var(--card-bg)",
                     borderRadius: "8px",
-                    border: "1px solid #eee"
+                    border: "1px solid var(--border)"
                   }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                       <div>
                         <span style={{ fontSize: "1.1em", fontWeight: "600" }}>{s.fullName}</span>
-                        <div style={{ fontSize: "0.9em", color: "#666", marginTop: "2px" }}>
+                        <div style={{ fontSize: "0.9em", color: "var(--muted)", marginTop: "2px" }}>
                           Age: {s.age || 'N/A'} | School: {s.school || 'N/A'}
                         </div>
                       </div>
@@ -642,7 +644,7 @@ export default function Driver() {
                           {request.notes && (
                             <div><strong>Notes:</strong> {request.notes}</div>
                           )}
-                          <div style={{ fontSize: '0.8em', color: '#666', marginTop: '8px' }}>
+                          <div style={{ fontSize: '0.8em', color: 'var(--muted)', marginTop: '8px' }}>
                             ?? Requested: {request.createdAt?.toDate?.().toLocaleString?.() || 'Unknown'}
                           </div>
                         </div>
@@ -693,7 +695,7 @@ export default function Driver() {
                 {allRequests.map((request) => (
                   <div key={request.id} style={{ 
                     padding: '16px',
-                    background: '#f9f9f9',
+                    background: 'var(--card-bg)',
                     borderRadius: '8px',
                     border: `2px solid ${getRequestStatusColor(request.status)}20`,
                     borderLeft: `4px solid ${getRequestStatusColor(request.status)}`
@@ -744,7 +746,7 @@ export default function Driver() {
           )}
 
           {rideRequests.length === 0 && (
-            <div style={{ textAlign: "center", padding: "20px", color: "#666" }}>
+            <div style={{ textAlign: "center", padding: "20px", color: "var(--muted)" }}>
               No ride requests yet
             </div>
           )}

@@ -305,7 +305,7 @@ export default function FindDrivers() {
         </div>
       ) : (
         <div>
-          <div style={{ marginBottom: 16, color: '#666' }}>
+          <div style={{ marginBottom: 16, color: 'var(--muted)' }}>
             Found {filteredDrivers.length} driver{filteredDrivers.length !== 1 ? 's' : ''}
             {searchArea && ` matching "${searchArea}"`}
           </div>
@@ -318,7 +318,7 @@ export default function FindDrivers() {
 
       <div style={{ marginTop: 24, padding: 16, backgroundColor: '#f8f9fa', borderRadius: 8 }}>
         <h5>💡 Tips for Parents:</h5>
-        <ul style={{ marginLeft: 16, color: '#666' }}>
+        <ul style={{ marginLeft: 16, color: 'var(--muted)' }}>
           <li>Check driver ratings and reviews before contacting</li>
           <li>Ask about safety certifications and insurance</li>
           <li>Discuss pickup/drop-off locations and timing</li>
@@ -343,7 +343,7 @@ export default function FindDrivers() {
         }}>
           <div className="card" style={{ maxWidth: 500, margin: 20, maxHeight: '90vh', overflow: 'auto' }}>
             <h3>Send Transport Request</h3>
-            <p style={{ color: '#666', marginBottom: 20 }}>
+            <p style={{ color: 'var(--muted)', marginBottom: 20 }}>
               Send a request to <strong>{selectedDriver?.displayName}</strong> for school transport service.
             </p>
 
